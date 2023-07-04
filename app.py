@@ -59,7 +59,7 @@ if uploaded_file is not None:
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
                 X_train, X_test, y_train, y_test= process_data(DF)
-                report= model(X_train, X_test, y_train, y_test, alg, save= False, task= task_type)
+                report= model(X_train, X_test, y_train, y_test, alg, save= True, task= task_type)
                 st.write("Accuracy:")
                 st.write(report[0])
                 st.write("Confusion Matrix")
@@ -69,7 +69,7 @@ if uploaded_file is not None:
             if task_type == "Regression":
                 st.write('Perform Regression task with option:')
                 X_train, X_test, y_train, y_test= process_data(DF)
-                report= model(X_train, X_test, y_train, y_test, alg, save= False, task= task_type)
+                report= model(X_train, X_test, y_train, y_test, alg, save= True, task= task_type)
                 st.write("MSE:")
                 st.write(report)
 
@@ -86,6 +86,11 @@ if uploaded_file is not None:
             fig, ax = plt.subplots()
             sns.scatterplot(data=DF, x='Age', y=target)
             st.pyplot(fig)
+
+        if st.button('Download'):
+            with open('model.pkl', 'rb') as file:
+                model_data = file.read()
+            st.download_button(label="Download Model File", data=model_data, file_name="model.pkl")
 
     elif 'loaded' in locals():
         st.write("laoded model")
