@@ -42,6 +42,9 @@ if uploaded_file is not None:
         elif task_type == "Regression":
             st.write("Regression task selected")
 
+            clean = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
+            outlier = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
+            alg = st.selectbox("Select The Model", ["Linear Regression", "ElasticNet"])
         else:
             raise ValueError("Invalid Selection")
         
@@ -56,7 +59,7 @@ if uploaded_file is not None:
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
                 X_train, X_test, y_train, y_test= process_data(DF)
-                report= model(X_train, X_test, y_train, y_test, alg)
+                report= model(X_train, X_test, y_train, y_test, alg, save= False, task= task_type)
                 st.write("Accuracy:")
                 st.write(report[0])
                 st.write("Confusion Matrix")
@@ -64,7 +67,12 @@ if uploaded_file is not None:
 
             
             if task_type == "Regression":
-                st.write('Perform regression task with option')
+                st.write('Perform Regression task with option:')
+                X_train, X_test, y_train, y_test= process_data(DF)
+                report= model(X_train, X_test, y_train, y_test, alg, save= False, task= task_type)
+                st.write("MSE:")
+                st.write(report)
+
 
         if st.button('Plot Graphs'):
             DF= process_data(DF)

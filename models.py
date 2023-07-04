@@ -5,21 +5,27 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet
 from sklearn.svm import LinearSVC
 
 class Model:
     def __init__(self, algorithm):
         self.pipeline = None
         self.model = None
-       
         self.label_encoder = LabelEncoder()
+
         if algorithm == 'SVC':
             self.algorithm= LinearSVC()
         elif algorithm == 'LR':
             self.algorithm= LogisticRegression()
+        elif algorithm == 'Linear Regression':
+            self.algorithm= LinearRegression()
+        elif algorithm == 'ElasticNet':
+            self.algorithm= ElasticNet()
+        else:
+            raise NotImplementedError
 
     def build_pipeline(self, X):
         categorical_features= X.select_dtypes('object').columns.tolist()
@@ -59,21 +65,28 @@ class Model:
         X= self.preprocess(X)
         return self.model.predict(X)
  
-    def print_accuracy_score(self, X, y_true):
+    def accuracy_score(self, X, y_true):
         y_pred = self.predict(X)
         if y_true.dtypes == 'object':
             y_true = self.label_encoder.transform(y_true)
         accuracy = accuracy_score(y_true, y_pred)
-        # print(f"Accuracy Score: {accuracy:.4f}")
         return accuracy
 
-    def print_confusion_matrix(self, X, y_true):
+    def confusion_matrix(self, X, y_true):
         y_pred = self.predict(X)
         if y_true.dtypes == 'object':
             y_pred = self.label_encoder.inverse_transform(y_pred)
         cm = confusion_matrix(y_true, y_pred)
 
         return cm
+    
+    def mean_sq(self, X, y_true):
+        y_pred= self.predict(X)
+        if y_true.dtype == 'object':
+            pass
+
+        mse= mean_squared_error(y_true, y_pred)
+        return mse
 
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
@@ -82,12 +95,19 @@ class Model:
 
 
 
-def model(X_train, X_test, y_train, y_test, alg, save=False):
+def model(X_train, X_test, y_train, y_test, alg, save=False, task=None):
     _model= Model(alg)
     _model.train(X_train, y_train)
     if save:
         _model.save_model('model.pkl')
-    acc= _model.print_accuracy_score(X_test, y_test)
-    cm= _model.print_confusion_matrix(X_test, y_test)
 
-    return acc, cm
+    if task == "Classification":
+        acc= _model.accuracy_score(X_test, y_test)
+        cm= _model.confusion_matrix(X_test, y_test)
+        return acc, cm
+
+    elif task == "Regression":
+        mse= _model.mean_sq(X_test, y_test)
+        return mse
+    else:
+        raise ValueError('invalid Task')
