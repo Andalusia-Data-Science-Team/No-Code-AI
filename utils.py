@@ -1,7 +1,7 @@
 import pandas as pd, numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
-
+from sklearn.model_selection import train_test_split
 
 
 def missing(_df, clean_method= 'Remove Missing Data'):
@@ -19,8 +19,9 @@ def missing(_df, clean_method= 'Remove Missing Data'):
 
 
         categorical_features = df.select_dtypes(include=object).columns
-        categorical_imputer = SimpleImputer(strategy='most_frequent')
-        df[categorical_features] = categorical_imputer.fit_transform(df[categorical_features])
+        if len(categorical_features) != 0:
+            categorical_imputer = SimpleImputer(strategy='most_frequent')
+            df[categorical_features] = categorical_imputer.fit_transform(df[categorical_features])
         return df
     
     else:
@@ -62,6 +63,14 @@ def remove_outliers(_df, method= "Don't Remove Outliers"):
     else:
         return _df
     
-def UnivariantGraphs(_df):
-    pass
+def handle(_df, trg, cls= 'Classification'):
+    X= _df.drop([trg], axis= 1)
+    y= _df[trg]
+
+    if cls == 'Classification':
+        X_train, X_test, y_train, y_test= train_test_split(X, y, stratify= y)
+    else:
+        X_train, X_test, y_train, y_test= train_test_split(X, y)
+
+    return X_train, X_test, y_train, y_test
 

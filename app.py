@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import utils
-from models import Model
+from models import model
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -26,6 +26,10 @@ if uploaded_file is not None:
         DF= df.copy()
         cols= DF.columns
         target = st.selectbox('Select The Target', cols)
+        selected_options = st.multiselect('Select columns to be removed', cols)
+        DF= DF.drop(selected_options, axis= 1)
+
+        value = st.slider("Select validation size %validation", min_value=0, max_value=100, step=1)
         task_type = st.radio("Select Task Type", ["Classification", "Regression"], index=0, help="Select the task type")
 
         if task_type == "Classification":
@@ -33,7 +37,7 @@ if uploaded_file is not None:
 
             clean = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
             outlier = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
-            model = st.selectbox("Select The Model", ["SVM", "LR"])
+            alg = st.selectbox("Select The Model", ["SVC", "LR"])
 
         elif task_type == "Regression":
             st.write("Regression task selected")
@@ -44,13 +48,19 @@ if uploaded_file is not None:
         def process_data(_df):
             DF= utils.missing(_df, clean)
             DF= utils.remove_outliers(DF, outlier)
-            return DF
+
+            X_train, X_test, y_train, y_test= utils.handle(DF, target, task_type)
+            return X_train, X_test, y_train, y_test
         
         if st.button('Apply'):
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
-                DF= process_data(DF)
-                st.write(DF)
+                X_train, X_test, y_train, y_test= process_data(DF)
+                report= model(X_train, X_test, y_train, y_test, alg)
+                st.write("Accuracy:")
+                st.write(report[0])
+                st.write("Confusion Matrix")
+                st.write(report[1])
 
             
             if task_type == "Regression":
@@ -69,8 +79,11 @@ if uploaded_file is not None:
             sns.scatterplot(data=DF, x='Age', y=target)
             st.pyplot(fig)
 
-    if 'loaded' in locals():
+    elif 'loaded' in locals():
         st.write("laoded model")
+
+    else:
+        raise ValueError('invalid')
 
 
 
