@@ -74,3 +74,22 @@ def handle(_df, trg, cls= 'Classification'):
 
     return X_train, X_test, y_train, y_test
 
+
+def HeatMap(_df):
+    return _df.select_dtypes('number').corr()
+
+def corr_plot(_df):
+    corr_matrix= _df.select_dtypes('number').corr()
+    tril_index= np.tril_indices_from(corr_matrix)
+    for coord in zip(*tril_index):
+        corr_matrix.iloc[coord[0], coord[1]] = np.NaN
+
+    corr_values = (corr_matrix
+                .stack()
+                .to_frame()
+                .reset_index()
+                .rename(columns={'level_0':'feature1',
+                                    'level_1':'feature2',
+                                    0:'correlation'}))
+    corr_values['abs_correlation'] = corr_values.correlation.abs()
+    return corr_values

@@ -91,7 +91,7 @@ class Model:
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
             pickle.dump(self.pipeline, f)
-        print(f"Model saved successfully as: {file_path}.pkl")
+        print(f"Model saved successfully as: {file_path}")
 
 
 

@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd
+import pandas as pd, numpy as np
 import utils
 from models import model
 import matplotlib.pyplot as plt
@@ -29,7 +29,7 @@ if uploaded_file is not None:
         selected_options = st.multiselect('Select columns to be removed', cols)
         DF= DF.drop(selected_options, axis= 1)
 
-        value = st.slider("Select validation size %validation", min_value=0, max_value=100, step=1)
+        value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
         task_type = st.radio("Select Task Type", ["Classification", "Regression"], index=0, help="Select the task type")
 
         if task_type == "Classification":
@@ -48,9 +48,11 @@ if uploaded_file is not None:
         else:
             raise ValueError("Invalid Selection")
         
-        def process_data(_df):
+        def process_data(_df, all= False):
             DF= utils.missing(_df, clean)
             DF= utils.remove_outliers(DF, outlier)
+            if all:
+                return DF
 
             X_train, X_test, y_train, y_test= utils.handle(DF, target, task_type)
             return X_train, X_test, y_train, y_test
@@ -75,16 +77,20 @@ if uploaded_file is not None:
 
 
         if st.button('Plot Graphs'):
-            DF= process_data(DF)
-            st.subheader('Histogram')
+            DF= process_data(DF, all= True)
+            st.subheader('Heat Map')
             fig, ax = plt.subplots()
-            ax.hist(DF['Age'])
+            plot_data= utils.HeatMap(DF)
+            sns.heatmap(plot_data,ax = ax,cmap ="YlGnBu", linewidths = 0.1)
             st.pyplot(fig)
 
             # Display a scatter plot
-            st.subheader('Scatter Plot')
+            st.subheader('Correlation')
+            corr_values= utils.corr_plot(DF)
+            st.write(corr_values.sort_values(by= 'abs_correlation', ascending= False))
             fig, ax = plt.subplots()
-            sns.scatterplot(data=DF, x='Age', y=target)
+            ax = corr_values.abs_correlation.hist(bins=50, figsize=(12, 8))
+            ax.set(xlabel='Absolute Correlation', ylabel='Frequency')
             st.pyplot(fig)
 
         if st.button('Download'):
