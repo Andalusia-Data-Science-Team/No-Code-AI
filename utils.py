@@ -2,6 +2,7 @@ import pandas as pd, numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
+import streamlit as st
 
 
 def missing(_df, clean_method= 'Remove Missing Data'):
@@ -93,3 +94,10 @@ def corr_plot(_df):
                                     0:'correlation'}))
     corr_values['abs_correlation'] = corr_values.correlation.abs()
     return corr_values
+
+def inf_proc(item):
+    try:
+        fixed_item = float(item)
+        return fixed_item
+    except ValueError:
+        return item

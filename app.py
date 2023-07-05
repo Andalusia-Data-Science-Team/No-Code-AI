@@ -1,9 +1,12 @@
 import streamlit as st
 import pandas as pd, numpy as np
 import utils
-from models import model
+from models import model, inference
 import matplotlib.pyplot as plt
 import seaborn as sns
+from streamlit.runtime.scriptrunner import get_script_run_ctx as get_report_ctx
+from streamlit.web.server import Server
+import pickle
 
 uploaded_file = st.file_uploader("Upload Data/Model")
 
@@ -17,7 +20,11 @@ if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
         st.write(df)
     elif file_extension.lower() == 'pkl':
-        loaded= ''
+        try:
+            _model = pickle.load(uploaded_file)
+            st.success("Pickle file loaded successfully!")
+        except pickle.UnpicklingError as e:
+            st.error("Error: Invalid pickle file. Please upload a valid pickle file.")
     else:
         st.error('Please upload a CSV, Excel or Pickle file.')
 
@@ -93,13 +100,41 @@ if uploaded_file is not None:
             ax.set(xlabel='Absolute Correlation', ylabel='Frequency')
             st.pyplot(fig)
 
-        if st.button('Download'):
+
+        st.subheader('Inference')
+        inf_df = pd.DataFrame(columns=DF.drop([target], axis= 1).columns)
+        for column in inf_df.columns:
+            user_input = st.text_input(column)
+            user_input= utils.inf_proc(user_input)
+            inf_df[column] = [user_input]
+  
+        st.write(inf_df)
+        if st.button('Submit'):
+            preds= inference(inf_df)
+            st.write(preds)
+            
+
+        if st.button('Download Model'):
             with open('model.pkl', 'rb') as file:
                 model_data = file.read()
             st.download_button(label="Download Model File", data=model_data, file_name="model.pkl")
 
-    elif 'loaded' in locals():
+    elif '_model' in locals():
         st.write("laoded model")
+        st.warning("The Loaded Model assumes it has predict method and was train via sklearn")
+        st.subheader('Inference')
+        st.write('Example: Temperature,Humidity,Wind_Speed,...')
+        cols= st.text_input('Please Enter the Columns Comma Seperated')
+        cols_data= [item.strip() for item in cols.split(",")]
+        inf_df = pd.DataFrame(columns=cols_data)
+        for column in inf_df.columns:
+            user_input = st.text_input(column)
+            inf_df[column] = [user_input]
+  
+        st.write(inf_df)
+        if st.button('Submit'):
+            preds= _model.predict(inf_df)
+            st.write(preds)
 
     else:
         raise ValueError('invalid')

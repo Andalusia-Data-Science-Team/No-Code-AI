@@ -109,5 +109,19 @@ def model(X_train, X_test, y_train, y_test, alg, save=False, task=None):
     elif task == "Regression":
         mse= _model.mean_sq(X_test, y_test)
         return mse
+    
     else:
         raise ValueError('invalid Task')
+
+def inference(X):
+    try:
+        with open('model.pkl', 'rb') as f:
+            _model= pickle.load(f)
+
+        pred= _model.predict(X)
+        return pred
+    except FileNotFoundError:
+        print("Model file not found.")
+
+    except pickle.UnpicklingError:
+        print("Error loading the pickle model.")
