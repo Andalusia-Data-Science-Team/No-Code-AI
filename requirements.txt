@@ -3,4 +3,7 @@ streamlit
 seaborn
 matplotlib
 pandas
+pickle
+seaborn
 scikit-learn
+xgboost==1.7.6

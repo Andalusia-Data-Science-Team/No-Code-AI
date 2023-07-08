@@ -1,56 +1,152 @@
+from utils import SkewnessTransformer
+from model_utils import grid_dict
+
 import pickle
 import pandas as pd, numpy as np
 
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler, PolynomialFeatures, MinMaxScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error, r2_score
 
-from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet
-from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
+from sklearn.neighbors import KNeighborsRegressor
+from xgboost import XGBRegressor, XGBClassifier
+
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC, SVR
+from sklearn.ensemble import AdaBoostClassifier 
+from sklearn.tree import DecisionTreeClassifier
+
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import KFold
+
+# np.random.seed(SEED)
+
+models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
+              'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
+              'RF_cls': RandomForestClassifier(), 'XGB_cls': XGBClassifier(), 'XGB_reg': XGBRegressor(),
+              'Ridge': Ridge(), 'Lasso': Lasso(), 'extra_tree': ExtraTreesClassifier(), 'SVR': SVR(),
+              'GradientBoosting_cls': GradientBoostingClassifier(), 'Adaboost': AdaBoostClassifier(),
+              'DecisionTree_cls': DecisionTreeClassifier()}
+
+normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
+
+class KFoldModel(BaseEstimator, TransformerMixin):
+    def __init__(self, model, n_splits=5, shuffle=True, random_state=None):
+        self.model = model
+        self.n_splits = n_splits
+        self.shuffle = shuffle
+        self.random_state = random_state
+        self.cv = None
+        self.scores_ = []
+
+    def fit(self, X, y):
+        self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
+        self.scores_ = []
+        
+        for train_index, val_index in self.cv.split(X):
+            X_train, X_val = X[train_index], X[val_index]
+            y_train, y_val = y[train_index], y[val_index]
+            
+            self.model.fit(X_train, y_train)
+            score = self.model.score(X_val, y_val)
+            self.scores_.append(score)
+
+        return self
+
+    def transform(self, X):
+        return X
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+
+class GridSearchModel(BaseEstimator, TransformerMixin):
+    def __init__(self, alg, grid_params= None):
+        self.alg= alg
+        self.param_grid = grid_params
+        self.grid_search = None
+        self.best_estimator_ = None
+
+    def fit(self, X, y= None):
+        self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.param_grid, cv=3)
+        self.grid_search.fit(X, y)
+
+        self.best_estimator_ = self.grid_search.best_estimator_
+
+        return self
+    
+    def transform(self, X):
+        return X
+    
+    def predict(self, X):
+        return self.best_estimator_.predict(X)
+
+    def predict_proba(self, X):
+        return self.best_estimator_.predict_proba(X)
+
 
 class Model:
-    def __init__(self, algorithm):
+    def __init__(self, algorithm, grid= False):
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
 
-        if algorithm == 'SVC':
-            self.algorithm= LinearSVC()
-        elif algorithm == 'LR':
-            self.algorithm= LogisticRegression()
-        elif algorithm == 'Linear Regression':
-            self.algorithm= LinearRegression()
-        elif algorithm == 'ElasticNet':
-            self.algorithm= ElasticNet()
+        if algorithm in models_dict.keys():
+            self.algorithm= models_dict[algorithm]
         else:
             raise NotImplementedError
+        self.grid= grid
+        if grid:
+            self.grid_model= GridSearchModel(self.algorithm, grid_dict[algorithm])
 
-    def build_pipeline(self, X):
+
+    def build_pipeline(self, X, poly_feat= False, skew_fix= False):
         categorical_features= X.select_dtypes('object').columns.tolist()
         numerical_features= X.select_dtypes('number').columns.tolist() 
+
         categorical_transformer = Pipeline(steps=[
+            ('cat_imp', SimpleImputer(missing_values=np.nan, strategy="most_frequent")),
             ('one_hot_encoder', OneHotEncoder())
         ])
 
         numerical_transformer = Pipeline(steps=[
-            ('scaler', StandardScaler())
+            ('scaler', MinMaxScaler(feature_range = (0, 1)))
         ])
+
+        if skew_fix:
+            numerical_transformer.steps.append(('skew_fix', SkewnessTransformer(skew_limit= 0.75))),
+            numerical_transformer.steps.append(('num_imp', SimpleImputer(missing_values=np.nan, strategy= "mean")))
+
+        if poly_feat:
+            numerical_transformer.steps.append(('Polynomial_Features', PolynomialFeatures(degree=2)))
+            print('poly features applied')
 
         preprocessor = ColumnTransformer(transformers=[
             ('categorical', categorical_transformer, categorical_features),
             ('numerical', numerical_transformer, numerical_features)
         ])
 
-        self.pipeline = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('model', self.algorithm)
-        ])
+        if self.grid:
+            self.pipeline = Pipeline(steps=[
+                ('preprocessor', preprocessor),
+                ('model', self.grid_model)
+            ])
+            print('grid search applied')
+        else:
+            self.pipeline = Pipeline(steps=[
+                ('preprocessor', preprocessor),
+                ('model', self.algorithm)
+            ])
 
-    def train(self, X: pd.DataFrame, y: pd.Series):
-        self.build_pipeline(X)
-        # print(self.pipeline)
+    def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
+        self.build_pipeline(X, skew_fix= skew, poly_feat= poly)
         if y.dtypes == 'object':
             y = self.label_encoder.fit_transform(y)
 
@@ -64,29 +160,23 @@ class Model:
     def predict(self, X):
         X= self.preprocess(X)
         return self.model.predict(X)
- 
-    def accuracy_score(self, X, y_true):
-        y_pred = self.predict(X)
-        if y_true.dtypes == 'object':
-            y_true = self.label_encoder.transform(y_true)
-        accuracy = accuracy_score(y_true, y_pred)
-        return accuracy
 
-    def confusion_matrix(self, X, y_true):
+    def cls_metrics(self, X, y_true):
         y_pred = self.predict(X)
         if y_true.dtypes == 'object':
             y_pred = self.label_encoder.inverse_transform(y_pred)
-        cm = confusion_matrix(y_true, y_pred)
 
-        return cm
+        cm = confusion_matrix(y_true, y_pred)
+        accuracy = accuracy_score(y_true, y_pred)
+
+        return cm, accuracy
     
-    def mean_sq(self, X, y_true):
+    def reg_metrics(self, X, y_true):
         y_pred= self.predict(X)
-        if y_true.dtype == 'object':
-            pass
 
         mse= mean_squared_error(y_true, y_pred)
-        return mse
+        r2= r2_score(y_true, y_pred)
+        return mse, r2
 
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
@@ -95,20 +185,19 @@ class Model:
 
 
 
-def model(X_train, X_test, y_train, y_test, alg, save=False, task=None):
-    _model= Model(alg)
-    _model.train(X_train, y_train)
-    if save:
+def model(X_train, X_test, y_train, y_test, cfg):
+    _model= Model(cfg['alg'], cfg['apply_GridSearch'])
+    _model.train(X_train, y_train, cfg['skew_fix'], cfg['poly_feat'])
+    if cfg['save']:
         _model.save_model('model.pkl')
 
-    if task == "Classification":
-        acc= _model.accuracy_score(X_test, y_test)
-        cm= _model.confusion_matrix(X_test, y_test)
+    if cfg['task_type'] == "Classification":
+        cm, acc= _model.cls_metrics(X_test, y_test)
         return acc, cm
 
-    elif task == "Regression":
-        mse= _model.mean_sq(X_test, y_test)
-        return mse
+    elif cfg['task_type'] == "Regression":
+        mse, r2= _model.reg_metrics(X_test, y_test)
+        return mse, r2
     
     else:
         raise ValueError('invalid Task')
@@ -125,3 +214,4 @@ def inference(X):
 
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
+

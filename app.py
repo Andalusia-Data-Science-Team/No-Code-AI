@@ -4,11 +4,14 @@ import utils
 from models import model, inference
 import matplotlib.pyplot as plt
 import seaborn as sns
-from streamlit.runtime.scriptrunner import get_script_run_ctx as get_report_ctx
-from streamlit.web.server import Server
 import pickle
 
+
 uploaded_file = st.file_uploader("Upload Data/Model")
+SEED = int(st.number_input('Enter a Seed', value=42))
+st.write(f'Using {SEED} as a seed')
+np.random.seed(SEED)
+
 
 if uploaded_file is not None:
     file_extension = uploaded_file.name.split(".")[-1]
@@ -30,6 +33,7 @@ if uploaded_file is not None:
 
 
     if 'df' in locals():
+        cfg= {'save': True} # for inference stability it's fixed
         DF= df.copy()
         cols= DF.columns
         target = st.selectbox('Select The Target', cols)
@@ -41,23 +45,36 @@ if uploaded_file is not None:
 
         if task_type == "Classification":
             st.write("Classification task selected")
-
-            clean = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
-            outlier = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
-            alg = st.selectbox("Select The Model", ["SVC", "LR"])
+            cfg['task_type']= task_type
+            cfg['clean'] = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
+            cfg['outlier'] = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
+            cfg['alg'] = st.selectbox("Select The Model", ["SVC", "LR", "KNN_cls", "RF_cls", "XGB_cls", 
+                                                           "GradientBoosting_cls", "Adaboost", "DecisionTree_cls", "extra_tree"])
+            cfg['skew_fix']= st.checkbox('Skew Fix')
+            cfg['poly_feat']= st.checkbox('Add Polynomial Features')
+            cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
+            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            # cfg['save']= st.checkbox('Save Model')
 
         elif task_type == "Regression":
             st.write("Regression task selected")
+            cfg['task_type']= task_type
+            cfg['clean'] = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
+            cfg['outlier'] = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
+            cfg['alg'] = st.selectbox("Select The Model", ["Linear Regression", "ElasticNet", "KNN_reg", "XGB_reg", 
+                                                           "Ridge", "Lasso", "SVR"])
+            cfg['skew_fix']= st.checkbox('Skew Fix')
+            cfg['poly_feat']= st.checkbox('Add Polynomial Features')
+            cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
+            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            # cfg['save']= st.checkbox('Save Model')
 
-            clean = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
-            outlier = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
-            alg = st.selectbox("Select The Model", ["Linear Regression", "ElasticNet"])
         else:
             raise ValueError("Invalid Selection")
         
         def process_data(_df, all= False):
-            DF= utils.missing(_df, clean)
-            DF= utils.remove_outliers(DF, outlier)
+            DF= utils.missing(_df, cfg['clean'])
+            DF= utils.remove_outliers(DF, cfg['outlier'])
             if all:
                 return DF
 
@@ -68,7 +85,7 @@ if uploaded_file is not None:
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
                 X_train, X_test, y_train, y_test= process_data(DF)
-                report= model(X_train, X_test, y_train, y_test, alg, save= True, task= task_type)
+                report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("Accuracy:")
                 st.write(report[0])
                 st.write("Confusion Matrix")
@@ -78,10 +95,11 @@ if uploaded_file is not None:
             if task_type == "Regression":
                 st.write('Perform Regression task with option:')
                 X_train, X_test, y_train, y_test= process_data(DF)
-                report= model(X_train, X_test, y_train, y_test, alg, save= True, task= task_type)
+                report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("MSE:")
-                st.write(report)
-
+                st.write(report[0])
+                st.write("R2:")
+                st.write(report[1])
 
         if st.button('Plot Graphs'):
             DF= process_data(DF, all= True)
