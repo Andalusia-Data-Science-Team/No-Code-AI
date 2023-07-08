@@ -101,7 +101,7 @@ def inf_proc(item):
     try:
         fixed_item = float(item)
         return fixed_item
-    except ValueError:
+    except:
         return item
 
 
