@@ -2,9 +2,6 @@ import pandas as pd, numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
-import streamlit as st
-from imblearn.over_sampling import SMOTE
-import math
 
 from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
