@@ -73,7 +73,7 @@ def handle(_df, trg, cls= 'Classification'):
     if cls == 'Classification':
         X_train, X_test, y_train, y_test= train_test_split(X, y, stratify= y)
     else:
-        X_train, X_test, y_train, y_test= train_test_split(X, y)
+        X_train, X_test, y_train, y_test= train_test_split(X, y, shuffle= False)
 
     return X_train, X_test, y_train, y_test
 
@@ -85,7 +85,7 @@ def corr_plot(_df):
     corr_matrix= _df.select_dtypes('number').corr()
     tril_index= np.tril_indices_from(corr_matrix)
     for coord in zip(*tril_index):
-        corr_matrix.iloc[coord[0], coord[1]] = np.NaN
+        corr_matrix.iloc[coord[0], coord[1]] = np.nan
 
     corr_values = (corr_matrix
                 .stack()

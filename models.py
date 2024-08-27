@@ -1,5 +1,6 @@
 from utils import SkewnessTransformer
 from model_utils import grid_dict
+import wandb
 
 import pickle
 import pandas as pd, numpy as np
@@ -57,6 +58,7 @@ class KFoldModel(BaseEstimator, TransformerMixin):
             self.model.fit(X_train, y_train)
             score = self.model.score(X_val, y_val)
             self.scores_.append(score)
+            wandb.log({"fold_score": score})  # Log each fold score to wandb
 
         return self
 
@@ -67,14 +69,15 @@ class KFoldModel(BaseEstimator, TransformerMixin):
         return self.model.predict(X)
 
 
+
 class GridSearchModel(BaseEstimator, TransformerMixin):
-    def __init__(self, alg, grid_params= None):
-        self.alg= alg
+    def __init__(self, alg, grid_params=None):
+        self.alg = alg
         self.param_grid = grid_params
         self.grid_search = None
         self.best_estimator_ = None
 
-    def fit(self, X, y= None):
+    def fit(self, X, y=None):
         self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.param_grid, cv=3)
         self.grid_search.fit(X, y)
 
@@ -93,36 +96,47 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
 
 
 class Model:
-    def __init__(self, algorithm, grid= False):
+    def __init__(self, algorithm, grid=False, kfold=False):
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
 
         if algorithm in models_dict.keys():
-            self.algorithm= models_dict[algorithm]
+            self.algorithm = models_dict[algorithm]
         else:
             raise NotImplementedError
-        self.grid= grid
+        
+        self.grid = grid
+        self.kfold = kfold
+
         if grid:
-            self.grid_model= GridSearchModel(self.algorithm, grid_dict[algorithm])
+            self.grid_model = GridSearchModel(self.algorithm, grid_dict[algorithm])
 
+        if kfold:
+            self.kfold_model = KFoldModel(self.algorithm)
 
-    def build_pipeline(self, X, poly_feat= False, skew_fix= False):
-        categorical_features= X.select_dtypes('object').columns.tolist()
-        numerical_features= X.select_dtypes('number').columns.tolist() 
+        # Initialize wandb
+        wandb.init(project="my_model_project")
+        wandb.config.algorithm = algorithm
+        wandb.config.grid_search = grid
+        wandb.config.kfold = kfold
+
+    def build_pipeline(self, X, poly_feat=False, skew_fix=False):
+        categorical_features = X.select_dtypes('object').columns.tolist()
+        numerical_features = X.select_dtypes('number').columns.tolist() 
 
         categorical_transformer = Pipeline(steps=[
             ('cat_imp', SimpleImputer(missing_values=np.nan, strategy="most_frequent")),
-            ('one_hot_encoder', OneHotEncoder())
+            ('one_hot_encoder', OneHotEncoder(handle_unknown='ignore'))
         ])
 
         numerical_transformer = Pipeline(steps=[
-            ('scaler', MinMaxScaler(feature_range = (0, 1)))
+            ('scaler', MinMaxScaler(feature_range=(0, 1)))
         ])
 
         if skew_fix:
-            numerical_transformer.steps.append(('skew_fix', SkewnessTransformer(skew_limit= 0.75))),
-            numerical_transformer.steps.append(('num_imp', SimpleImputer(missing_values=np.nan, strategy= "mean")))
+            numerical_transformer.steps.append(('skew_fix', SkewnessTransformer(skew_limit=0.75))),
+            numerical_transformer.steps.append(('num_imp', SimpleImputer(missing_values=np.nan, strategy="mean")))
 
         if poly_feat:
             numerical_transformer.steps.append(('Polynomial_Features', PolynomialFeatures(degree=2)))
@@ -134,31 +148,48 @@ class Model:
         ])
 
         if self.grid:
-            self.pipeline = Pipeline(steps=[
-                ('preprocessor', preprocessor),
-                ('model', self.grid_model)
-            ])
+            model_step = ('model', self.grid_model)
             print('grid search applied')
+        elif self.kfold:
+            model_step = ('model', self.kfold_model)
+            print('kfold applied')
         else:
-            self.pipeline = Pipeline(steps=[
-                ('preprocessor', preprocessor),
-                ('model', self.algorithm)
-            ])
+            model_step = ('model', self.algorithm)
+
+        self.pipeline = Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            model_step
+        ])
 
     def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
-        self.build_pipeline(X, skew_fix= skew, poly_feat= poly)
+        self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
         if y.dtypes == 'object':
             y = self.label_encoder.fit_transform(y)
 
-        self.pipeline.fit(X, y)
+        # Log the training data shape and label distribution
+        wandb.config.update({
+            "num_samples": len(X),
+            "num_features": X.shape[1],
+            "num_classes": len(set(y)) if y is not None else None,
+        })
 
+        self.pipeline.fit(X, y)
         self.model = self.pipeline.named_steps['model']
+
+        if self.kfold:
+            # Log the average score from KFold
+            avg_score = sum(self.model.scores_) / len(self.model.scores_)
+            wandb.log({"avg_kfold_score": avg_score})
+
+        # Log the model parameters
+        if self.grid:
+            wandb.log({"best_params": self.model.best_estimator_.get_params()})
 
     def preprocess(self, X):
         return self.pipeline.named_steps['preprocessor'].transform(X)
 
     def predict(self, X):
-        X= self.preprocess(X)
+        X = self.preprocess(X)
         return self.model.predict(X)
 
     def cls_metrics(self, X, y_true):
@@ -169,19 +200,30 @@ class Model:
         cm = confusion_matrix(y_true, y_pred)
         accuracy = accuracy_score(y_true, y_pred)
 
+        # Log the metrics
+        wandb.log({"confusion_matrix": wandb.plot.confusion_matrix(probs=None, y_true=y_true, preds=y_pred)})
+        wandb.log({"accuracy": accuracy})
+
         return cm, accuracy
     
     def reg_metrics(self, X, y_true):
-        y_pred= self.predict(X)
+        y_pred = self.predict(X)
 
-        mse= mean_squared_error(y_true, y_pred)
-        r2= r2_score(y_true, y_pred)
+        mse = mean_squared_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+
+        # Log the metrics
+        wandb.log({"mse": mse, "r2": r2})
+
         return mse, r2
 
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
             pickle.dump(self.pipeline, f)
         print(f"Model saved successfully as: {file_path}")
+
+        # Save the model to wandb
+        wandb.save(file_path)
 
 
 
