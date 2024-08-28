@@ -53,7 +53,10 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            cfg['apply_KFold']= st.checkbox('Apply KFold')
+            if cfg['apply_KFold']:
+                st.info("Odd numbers are better for the number of Folds.")
+                cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
             # cfg['save']= st.checkbox('Save Model')
 
         elif task_type == "Regression":
@@ -66,7 +69,10 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            cfg['apply_KFold']= st.checkbox('Apply KFold')
+            if cfg['apply_KFold']:
+                st.info("Odd numbers are better for the number of Folds.")
+                cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
             # cfg['save']= st.checkbox('Save Model')
 
         else:

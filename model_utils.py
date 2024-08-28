@@ -26,7 +26,6 @@ lr_param_grid = {
 
 lreg_param_grid = {
     'fit_intercept': [True, False],
-    'normalize': [True, False]
 }
 
 en_param_grid = {
