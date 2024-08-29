@@ -5,3 +5,4 @@ wandb/
 *.pkl
 test.py
 *.ipynb
+*.bat

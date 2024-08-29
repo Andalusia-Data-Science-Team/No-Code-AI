@@ -3,7 +3,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 
-from scipy import stats
+from scipy import stats, optimize
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
@@ -214,5 +214,3 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
                 return max(all, key=lambda y: abs(all[y]))
             else:
                 return 'No Fix'
-
-        
