@@ -25,8 +25,7 @@ from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
-
-# np.random.seed(SEED)
+from interpretability import Interpretability
 
 models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
               'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
@@ -38,50 +37,53 @@ models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': Lin
 normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
 
 
-class KFoldModel(BaseEstimator, TransformerMixin):
-    def __init__(self, model, n_splits=5, shuffle=True, random_state=None):
-        self.model = model
-        self.n_splits = n_splits
-        self.shuffle = shuffle
-        self.random_state = random_state
-        self.cv = None
-        self.scores_ = []
-        self.best_estimators_ = []
+# class KFoldModel(BaseEstimator, TransformerMixin):
+#     def __init__(self, model, n_splits=5, shuffle=True, random_state=None):
+#         self.model = model
+#         self.n_splits = n_splits
+#         self.shuffle = shuffle
+#         self.random_state = random_state
+#         self.cv = None
+#         self.scores_ = []
+#         self.best_estimators_ = []
 
-    def fit(self, X, y):
-        self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
-        self.scores_ = []
-        self.best_estimators_ = []
+#     def fit(self, X, y):
+#         self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
+#         self.scores_ = []
+#         self.best_estimators_ = []
 
-        for train_index, val_index in tqdm(self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"):
-            X_train, X_val = X[train_index], X[val_index]
-            y_train, y_val = y[train_index], y[val_index]
+#         for train_index, val_index in tqdm(self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"):
+#             X_train, X_val = X[train_index], X[val_index]
+#             y_train, y_val = y[train_index], y[val_index]
             
-            self.model.fit(X_train, y_train)
-            self.best_estimators_.append(self.model.best_estimator_)
+#             self.model.fit(X_train, y_train)
+#             self.best_estimators_.append(self.model.best_estimator_)
             
-            score = accuracy_score(y_val, self.model.predict(X_val))
-            self.scores_.append(score)
+#             score = accuracy_score(y_val, self.model.predict(X_val))
+#             self.scores_.append(score)
 
-        return self
+#         return self
 
-    def predict(self, X):
-        return self.best_estimators_[-1].predict(X)
+#     def predict(self, X):
+#         return self.best_estimators_[-1].predict(X)
 
 
 
 class GridSearchModel(BaseEstimator, TransformerMixin):
     def __init__(self, alg, grid_params=None):
         self.alg = alg
-        self.param_grid = grid_params
+        self.grid_params = grid_params if grid_params is not None else {}
         self.grid_search = None
         self.best_estimator_ = None
 
     def fit(self, X, y=None):
-        self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.param_grid, cv=3)
+        print(self.grid_params)
+        self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.grid_params, cv=3)
         self.grid_search.fit(X, y)
+        print('grid search applied')
 
         self.best_estimator_ = self.grid_search.best_estimator_
+        print(self.best_estimator_, type(self.best_estimator_))
 
         return self
     
@@ -96,7 +98,7 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
 
 
 class Model:
-    def __init__(self, algorithm, grid=False, kfold=False):
+    def __init__(self, algorithm, grid=False):
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
@@ -107,14 +109,9 @@ class Model:
             raise NotImplementedError
         
         self.grid = grid
-        self.kfold = kfold
 
         if grid:
-            self.grid_model = GridSearchModel(self.algorithm, grid_dict[algorithm])
-
-        if kfold:
-            self.kfold_model = KFoldModel(self.algorithm)
-
+            self.grid_model = GridSearchModel(alg= self.algorithm, grid_params= grid_dict[algorithm])
 
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
         categorical_features = X.select_dtypes('object').columns.tolist()
@@ -144,10 +141,7 @@ class Model:
 
         if self.grid:
             model_step = ('model', self.grid_model)
-            print('grid search applied')
-        elif self.kfold:
-            model_step = ('model', self.kfold_model)
-            print('kfold applied')
+            
         else:
             model_step = ('model', self.algorithm)
 
@@ -158,7 +152,6 @@ class Model:
 
     def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
-        print(self.pipeline)
         if y.dtypes == 'object':
             y = self.label_encoder.fit_transform(y)
 
@@ -200,7 +193,7 @@ class Model:
 
 
 def model(X_train, X_test, y_train, y_test, cfg):
-    _model= Model(cfg['alg'], cfg['apply_GridSearch'], cfg['apply_KFold'])
+    _model= Model(cfg['alg'], cfg['apply_GridSearch'])
     _model.train(X_train, y_train, cfg['skew_fix'], cfg['poly_feat'])
     if cfg['save']:
         _model.save_model('model.pkl')
@@ -215,6 +208,21 @@ def model(X_train, X_test, y_train, y_test, cfg):
     
     else:
         raise ValueError('invalid Task')
+
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None):
+    try:
+        with open('model.pkl', 'rb') as f:
+            m= pickle.load(f)
+    except FileNotFoundError:
+        print("Model file not found.")
+
+    except pickle.UnpicklingError:
+        print("Error loading the pickle model.")
+
+    interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+    x= interpreter.compute_shap_values()
+    interpreter.plot_variable_importance()
+    return x
 
 def inference(X):
     try:

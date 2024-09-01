@@ -1,17 +1,26 @@
 import shap
 import lime
 import lime.lime_tabular
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
+import pandas as pd, numpy as np
+
+from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
+from sklearn.neighbors import KNeighborsRegressor
+from xgboost import XGBRegressor, XGBClassifier
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC, SVR
+from sklearn.ensemble import AdaBoostClassifier 
+from sklearn.tree import DecisionTreeClassifier
 
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
 
-        self.model = model
+        self.model = model.named_steps['model']
+        self.processor= model.named_steps['preprocessor']
         self.model_type = model_type
-        self.X_train = X_train
-        self.X_test = X_test
+        self.X_train = self.processor.transform(X_train)
+        self.X_test = self.processor.transform(X_test)
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
@@ -19,13 +28,23 @@ class Interpretability:
         self.lime_explainer = None
 
     def compute_shap_values(self):
-        """Compute SHAP values for the model."""
-        if self.model_type == 'classification':
-            self.explainer = shap.TreeExplainer(self.model) if hasattr(self.model, 'tree_') else shap.KernelExplainer(self.model.predict_proba, self.X_train)
-        else:
-            self.explainer = shap.TreeExplainer(self.model) if hasattr(self.model, 'tree_') else shap.KernelExplainer(self.model.predict, self.X_train)
+        if isinstance(self.model.alg, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
+                                   ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
+            self.explainer = shap.TreeExplainer(self.model.best_estimator_)
 
+        elif isinstance(self.model.alg, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
+            self.explainer = shap.LinearExplainer(self.model, self.X_train)
+        elif isinstance(self.model.alg, (SVC, SVR, KNeighborsClassifier, KNeighborsRegressor, AdaBoostClassifier)):
+            if self.model_type == 'classification':
+                self.explainer = shap.KernelExplainer(self.model.predict_proba, self.X_train)
+            else:
+                self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
+        else:
+            # Default to KernelExplainer for any unsupported models
+            self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
         self.shap_values = self.explainer.shap_values(self.X_test)
+        
+        return self.shap_values
         
     def plot_variable_importance(self):
         """Plot SHAP summary plot (variable importance)."""

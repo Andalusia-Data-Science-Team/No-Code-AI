@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd, numpy as np
 import utils
-from models import model, inference
+from models import model, inference, shap_lime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
-
 
 uploaded_file = st.file_uploader("Upload Data/Model")
 SEED = int(st.number_input('Enter a Seed', value=42))
@@ -53,10 +52,10 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            cfg['apply_KFold']= st.checkbox('Apply KFold')
-            if cfg['apply_KFold']:
-                st.info("Odd numbers are better for the number of Folds.")
-                cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
+            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            # if cfg['apply_KFold']:
+            #     st.info("Odd numbers are better for the number of Folds.")
+            #     cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
             # cfg['save']= st.checkbox('Save Model')
 
         elif task_type == "Regression":
@@ -69,10 +68,10 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            cfg['apply_KFold']= st.checkbox('Apply KFold')
-            if cfg['apply_KFold']:
-                st.info("Odd numbers are better for the number of Folds.")
-                cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
+            # cfg['apply_KFold']= st.checkbox('Apply KFold')
+            # if cfg['apply_KFold']:
+            #     st.info("Odd numbers are better for the number of Folds.")
+            #     cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
             # cfg['save']= st.checkbox('Save Model')
 
         else:
@@ -123,6 +122,10 @@ if uploaded_file is not None:
             ax = corr_values.abs_correlation.hist(bins=50, figsize=(12, 8))
             ax.set(xlabel='Absolute Correlation', ylabel='Frequency')
             st.pyplot(fig)
+
+        if st.button('SHAP & LIME Values'):
+            X_train, X_test, y_train, y_test= process_data(DF)
+            shap_lime(cfg, X_train, X_test, y_train, y_test)
 
 
         st.subheader('Inference')
