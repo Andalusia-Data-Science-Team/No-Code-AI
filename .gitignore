@@ -6,3 +6,4 @@ wandb/
 test.py
 *.ipynb
 *.bat
+*.csv
