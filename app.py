@@ -5,6 +5,8 @@ from models import model, inference, shap_lime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
+import matplotlib
+matplotlib.use('Agg')
 
 uploaded_file = st.file_uploader("Upload Data/Model")
 SEED = int(st.number_input('Enter a Seed', value=42))
@@ -52,11 +54,7 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            # cfg['apply_KFold']= st.checkbox('Apply KFold')
-            # if cfg['apply_KFold']:
-            #     st.info("Odd numbers are better for the number of Folds.")
-            #     cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
-            # cfg['save']= st.checkbox('Save Model')
+
 
         elif task_type == "Regression":
             st.write("Regression task selected")
@@ -68,11 +66,7 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
-            # cfg['apply_KFold']= st.checkbox('Apply KFold')
-            # if cfg['apply_KFold']:
-            #     st.info("Odd numbers are better for the number of Folds.")
-            #     cfg['n_splits'] = st.number_input('Enter the number of splits for KFold', min_value=3, value=5)
-            # cfg['save']= st.checkbox('Save Model')
+
 
         else:
             raise ValueError("Invalid Selection")
@@ -125,7 +119,9 @@ if uploaded_file is not None:
 
         if st.button('SHAP & LIME Values'):
             X_train, X_test, y_train, y_test= process_data(DF)
-            shap_lime(cfg, X_train, X_test, y_train, y_test)
+            _, p= shap_lime(cfg, X_train, X_test, y_train, y_test)
+            if p:
+                st.pyplot(p)
 
 
         st.subheader('Inference')

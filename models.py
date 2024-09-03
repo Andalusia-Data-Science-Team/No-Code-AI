@@ -27,6 +27,9 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 from interpretability import Interpretability
 
+import matplotlib
+matplotlib.use('Agg')
+
 models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
               'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
               'RF_cls': RandomForestClassifier(), 'XGB_cls': XGBClassifier(), 'XGB_reg': XGBRegressor(),
@@ -37,35 +40,35 @@ models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': Lin
 normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
 
 
-# class KFoldModel(BaseEstimator, TransformerMixin):
-#     def __init__(self, model, n_splits=5, shuffle=True, random_state=None):
-#         self.model = model
-#         self.n_splits = n_splits
-#         self.shuffle = shuffle
-#         self.random_state = random_state
-#         self.cv = None
-#         self.scores_ = []
-#         self.best_estimators_ = []
+class KFoldModel(BaseEstimator, TransformerMixin):
+    def __init__(self, model, n_splits=5, shuffle=True, random_state=None):
+        self.model = model
+        self.n_splits = n_splits
+        self.shuffle = shuffle
+        self.random_state = random_state
+        self.cv = None
+        self.scores_ = []
+        self.best_estimators_ = []
 
-#     def fit(self, X, y):
-#         self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
-#         self.scores_ = []
-#         self.best_estimators_ = []
+    def fit(self, X, y):
+        self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
+        self.scores_ = []
+        self.best_estimators_ = []
 
-#         for train_index, val_index in tqdm(self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"):
-#             X_train, X_val = X[train_index], X[val_index]
-#             y_train, y_val = y[train_index], y[val_index]
+        for train_index, val_index in tqdm(self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"):
+            X_train, X_val = X[train_index], X[val_index]
+            y_train, y_val = y[train_index], y[val_index]
             
-#             self.model.fit(X_train, y_train)
-#             self.best_estimators_.append(self.model.best_estimator_)
+            self.model.fit(X_train, y_train)
+            self.best_estimators_.append(self.model.best_estimator_)
             
-#             score = accuracy_score(y_val, self.model.predict(X_val))
-#             self.scores_.append(score)
+            score = accuracy_score(y_val, self.model.predict(X_val))
+            self.scores_.append(score)
 
-#         return self
+        return self
 
-#     def predict(self, X):
-#         return self.best_estimators_[-1].predict(X)
+    def predict(self, X):
+        return self.best_estimators_[-1].predict(X)
 
 
 
@@ -209,20 +212,26 @@ def model(X_train, X_test, y_train, y_test, cfg):
     else:
         raise ValueError('invalid Task')
 
-def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None):
-    try:
-        with open('model.pkl', 'rb') as f:
-            m= pickle.load(f)
-    except FileNotFoundError:
-        print("Model file not found.")
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None):
+    if m is not None:
+            interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+            x= interpreter.compute_shap_values()
+            fig= interpreter.plot_variable_importance()
+            return x, fig
+    else:
+        try:
+            with open('model.pkl', 'rb') as f:
+                m= pickle.load(f)
+        except FileNotFoundError:
+            print("Model file not found.")
 
-    except pickle.UnpicklingError:
-        print("Error loading the pickle model.")
+        except pickle.UnpicklingError:
+            print("Error loading the pickle model.")
 
-    interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-    x= interpreter.compute_shap_values()
-    interpreter.plot_variable_importance()
-    return x
+        interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+        x= interpreter.compute_shap_values()
+        p= interpreter.plot_variable_importance()
+        return x, p
 
 def inference(X):
     try:

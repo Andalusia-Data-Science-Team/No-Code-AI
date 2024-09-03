@@ -12,6 +12,10 @@ from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, Gradi
 from sklearn.svm import SVC, SVR
 from sklearn.ensemble import AdaBoostClassifier 
 from sklearn.tree import DecisionTreeClassifier
+import matplotlib.pyplot as plt
+
+import matplotlib
+matplotlib.use('Agg')
 
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
@@ -21,6 +25,9 @@ class Interpretability:
         self.model_type = model_type
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
+        cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
+        nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
+        self.all= cats + nums
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
@@ -30,7 +37,7 @@ class Interpretability:
     def compute_shap_values(self):
         if isinstance(self.model.alg, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
-            self.explainer = shap.TreeExplainer(self.model.best_estimator_)
+            self.explainer = shap.TreeExplainer(self.model.best_estimator_, feature_names= self.all)
 
         elif isinstance(self.model.alg, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -48,12 +55,14 @@ class Interpretability:
         
     def plot_variable_importance(self):
         """Plot SHAP summary plot (variable importance)."""
-        shap.summary_plot(self.shap_values, self.X_test)
+        # plt.figure(figsize=(10, 6))
+        shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all)
+        return plt
 
     def plot_summary_label(self, label_index):
         """Plot SHAP summary plot for a specific label (for classification)."""
         if self.model_type == 'classification' and self.shap_values is not None:
-            shap.summary_plot(self.shap_values[label_index], self.X_test)
+            shap.summary_plot(self.shap_values[label_index], self.X_test, feature_names= self.all)
 
     def plot_dependence(self, feature_name):
         """Plot SHAP dependence plot for a specific feature."""
