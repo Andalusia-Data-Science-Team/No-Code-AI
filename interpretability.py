@@ -2,6 +2,7 @@ import shap
 import lime
 import lime.lime_tabular
 import pandas as pd, numpy as np
+from models import GridSearchModel
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -13,6 +14,7 @@ from sklearn.svm import SVC, SVR
 from sklearn.ensemble import AdaBoostClassifier 
 from sklearn.tree import DecisionTreeClassifier
 import matplotlib.pyplot as plt
+import pickle
 
 import matplotlib
 matplotlib.use('Agg')
@@ -20,7 +22,7 @@ matplotlib.use('Agg')
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
 
-        self.model = model.named_steps['model']
+        _model = model.named_steps['model']
         self.processor= model.named_steps['preprocessor']
         self.model_type = model_type
         self.X_train = self.processor.transform(X_train)
@@ -33,15 +35,16 @@ class Interpretability:
         self.explainer = None
         self.shap_values = None
         self.lime_explainer = None
+        self.model= self.model_check(_model)
 
     def compute_shap_values(self):
-        if isinstance(self.model.alg, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
+        if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
-            self.explainer = shap.TreeExplainer(self.model.best_estimator_, feature_names= self.all)
+            self.explainer = shap.TreeExplainer(self.model, feature_names= self.all)
 
-        elif isinstance(self.model.alg, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
+        elif isinstance(self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
-        elif isinstance(self.model.alg, (SVC, SVR, KNeighborsClassifier, KNeighborsRegressor, AdaBoostClassifier)):
+        elif isinstance(self.model, (SVC, SVR, KNeighborsClassifier, KNeighborsRegressor, AdaBoostClassifier)):
             if self.model_type == 'classification':
                 self.explainer = shap.KernelExplainer(self.model.predict_proba, self.X_train)
             else:
@@ -49,6 +52,8 @@ class Interpretability:
         else:
             # Default to KernelExplainer for any unsupported models
             self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
+
+
         self.shap_values = self.explainer.shap_values(self.X_test)
         
         return self.shap_values
@@ -84,3 +89,31 @@ class Interpretability:
                                                    num_samples=num_samples)
         exp.show_in_notebook(show_table=True)
         return exp
+    
+    def model_check(self, model):
+        if hasattr(model, 'best_estimator_'):
+            return model.best_estimator_
+        else:
+            return model
+
+
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None):
+    if m is not None:
+            interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+            x= interpreter.compute_shap_values()
+            fig= interpreter.plot_variable_importance()
+            return x, fig
+    else:
+        try:
+            with open('model.pkl', 'rb') as f:
+                m= pickle.load(f)
+        except FileNotFoundError:
+            print("Model file not found.")
+
+        except pickle.UnpicklingError:
+            print("Error loading the pickle model.")
+
+        interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+        x= interpreter.compute_shap_values()
+        p= interpreter.plot_variable_importance()
+        return x, p

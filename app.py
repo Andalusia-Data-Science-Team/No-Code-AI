@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd, numpy as np
 import utils
-from models import model, inference, shap_lime
+from models import model, inference
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import matplotlib
+from interpretability import shap_lime
 matplotlib.use('Agg')
 
 uploaded_file = st.file_uploader("Upload Data/Model")

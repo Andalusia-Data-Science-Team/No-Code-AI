@@ -25,7 +25,6 @@ from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
-from interpretability import Interpretability
 
 import matplotlib
 matplotlib.use('Agg')
@@ -211,27 +210,6 @@ def model(X_train, X_test, y_train, y_test, cfg):
     
     else:
         raise ValueError('invalid Task')
-
-def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None):
-    if m is not None:
-            interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-            x= interpreter.compute_shap_values()
-            fig= interpreter.plot_variable_importance()
-            return x, fig
-    else:
-        try:
-            with open('model.pkl', 'rb') as f:
-                m= pickle.load(f)
-        except FileNotFoundError:
-            print("Model file not found.")
-
-        except pickle.UnpicklingError:
-            print("Error loading the pickle model.")
-
-        interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-        x= interpreter.compute_shap_values()
-        p= interpreter.plot_variable_importance()
-        return x, p
 
 def inference(X):
     try:

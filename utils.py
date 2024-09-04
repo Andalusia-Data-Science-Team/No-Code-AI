@@ -6,7 +6,6 @@ from sklearn.model_selection import train_test_split
 from scipy import stats, optimize
 from sklearn.base import BaseEstimator, TransformerMixin
 
-
 def missing(_df, clean_method= 'Remove Missing Data'):
     df= _df.copy()
     df.drop_duplicates(inplace= True)
@@ -214,3 +213,4 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
                 return max(all, key=lambda y: abs(all[y]))
             else:
                 return 'No Fix'
+            
