@@ -91,29 +91,6 @@ class Interpretability:
         else:
             return model
 
-
-# def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None, **kwargs):
-#     plts= []
-#     if m is not None:
-#             interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-#             fig= interpreter.plot_variable_importance()
-#             if kwargs.get('shap_feature'):
-#                 fig2= interpreter.plot_dependence(kwargs.get('shap_feature'))
-#             return plts
-#     else:
-#         try:
-#             with open('model.pkl', 'rb') as f:
-#                 m= pickle.load(f)
-#         except FileNotFoundError:
-#             print("Model file not found.")
-
-#         except pickle.UnpicklingError:
-#             print("Error loading the pickle model.")
-
-#         interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-#         fig2= interpreter.plot_dependence()
-#         p= interpreter.plot_variable_importance()
-#         return plts
 def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs):
     plts = []
     
