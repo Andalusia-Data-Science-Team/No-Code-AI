@@ -118,16 +118,47 @@ if uploaded_file is not None:
             ax.set(xlabel='Absolute Correlation', ylabel='Frequency')
             st.pyplot(fig)
 
+
+        checked_plots= {}
+        inf_df = pd.DataFrame(columns=DF.drop([target], axis= 1).columns)
+        selected_cols= inf_df.columns
+        shap_df= DF[selected_cols]
+
+        st.header("Xplain")
+        X_train, X_test, y_train, y_test= process_data(DF)
+        st.subheader("Feature Dependence")
+        plot_dependence= st.checkbox('Shap Summary')
+        if plot_dependence:
+            shap_feature= st.selectbox('Select The Feature', selected_cols)
+            summary_type= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
+            summary_type= st.selectbox("Summary Type", ["Aggregate", "Detailed"])
+        
+        summary_plot= st.checkbox('Summary Plot')
+        if summary_plot:
+            pass
+
+        feature_contribution= st.checkbox("Feature Contribution")
+        if feature_contribution:
+            target_feature= st.selectbox('Select The Feature to See its Contribution', selected_cols)
+            list_attr= st.selectbox(target_feature, [i for i in shap_df[target_feature].unique()])
+            # TODO
+            # Prediction Proba (handle both classification and regression cases)
+            # contribution plot
+            # partial dependence plot
+            # contribution table
+
+        st.subheader('What If')
         if st.button('SHAP & LIME Values'):
-            X_train, X_test, y_train, y_test= process_data(DF)
-            _, p= shap_lime(cfg, X_train, X_test, y_train, y_test)
-            if p:
+            p= shap_lime(cfg, X_train, X_test, y_train, y_test, shap_feature= shap_feature)
+            if isinstance(p, list):
+                for _p in p:
+                    st.pyplot(_p)
+            else:
                 st.pyplot(p)
 
 
-        st.subheader('Inference')
-        inf_df = pd.DataFrame(columns=DF.drop([target], axis= 1).columns)
-        for column in inf_df.columns:
+        # st.header('Inference')
+        for column in selected_cols:
             user_input = st.text_input(column)
             user_input= utils.inf_proc(user_input)
             inf_df[column] = [user_input]

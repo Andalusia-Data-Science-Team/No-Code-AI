@@ -36,8 +36,9 @@ class Interpretability:
         self.shap_values = None
         self.lime_explainer = None
         self.model= self.model_check(_model)
+        self._compute_shap_values()
 
-    def compute_shap_values(self):
+    def _compute_shap_values(self):
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
             self.explainer = shap.TreeExplainer(self.model, feature_names= self.all)
@@ -55,34 +56,28 @@ class Interpretability:
 
 
         self.shap_values = self.explainer.shap_values(self.X_test)
-        
-        return self.shap_values
-        
+                
     def plot_variable_importance(self):
-        """Plot SHAP summary plot (variable importance)."""
-        # plt.figure(figsize=(10, 6))
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all)
         return plt
 
     def plot_summary_label(self, label_index):
-        """Plot SHAP summary plot for a specific label (for classification)."""
         if self.model_type == 'classification' and self.shap_values is not None:
             shap.summary_plot(self.shap_values[label_index], self.X_test, feature_names= self.all)
 
     def plot_dependence(self, feature_name):
-        """Plot SHAP dependence plot for a specific feature."""
         if self.shap_values is not None:
             shap.dependence_plot(feature_name, self.shap_values, self.X_test)
+            return plt
 
     def explain_with_lime(self, num_features=5, num_samples=1000):
-        """Explain a prediction using LIME."""
         self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(
             self.X_train.values, 
             feature_names=self.X_train.columns, 
             class_names=np.unique(self.y_train) if self.model_type == 'classification' else None,
             discretize_continuous=True
         )
-        i = np.random.randint(0, self.X_test.shape[0])  # Randomly select a test instance
+        i = np.random.randint(0, self.X_test.shape[0])
         exp = self.lime_explainer.explain_instance(self.X_test.iloc[i].values, 
                                                    self.model.predict_proba if self.model_type == 'classification' else self.model.predict, 
                                                    num_features=num_features, 
@@ -97,23 +92,51 @@ class Interpretability:
             return model
 
 
-def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None):
-    if m is not None:
-            interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-            x= interpreter.compute_shap_values()
-            fig= interpreter.plot_variable_importance()
-            return x, fig
-    else:
+# def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m= None, **kwargs):
+#     plts= []
+#     if m is not None:
+#             interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+#             fig= interpreter.plot_variable_importance()
+#             if kwargs.get('shap_feature'):
+#                 fig2= interpreter.plot_dependence(kwargs.get('shap_feature'))
+#             return plts
+#     else:
+#         try:
+#             with open('model.pkl', 'rb') as f:
+#                 m= pickle.load(f)
+#         except FileNotFoundError:
+#             print("Model file not found.")
+
+#         except pickle.UnpicklingError:
+#             print("Error loading the pickle model.")
+
+#         interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+#         fig2= interpreter.plot_dependence()
+#         p= interpreter.plot_variable_importance()
+#         return plts
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs):
+    plts = []
+    
+    if m is None:
         try:
             with open('model.pkl', 'rb') as f:
-                m= pickle.load(f)
+                m = pickle.load(f)
         except FileNotFoundError:
             print("Model file not found.")
-
+            return plts
         except pickle.UnpicklingError:
             print("Error loading the pickle model.")
+            return plts
+    
+    interpreter = Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+    
+    plts.append(interpreter.plot_variable_importance())
 
-        interpreter= Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
-        x= interpreter.compute_shap_values()
-        p= interpreter.plot_variable_importance()
-        return x, p
+    if kwargs:
+        for method_name, method_params in kwargs.items():
+            if hasattr(interpreter, method_name):
+                method = getattr(interpreter, method_name)
+                
+                plts.append(method(**method_params))
+    
+    return plts
