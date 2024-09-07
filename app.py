@@ -43,7 +43,7 @@ if uploaded_file is not None:
         DF= DF.drop(selected_options, axis= 1)
 
         value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
-        task_type = st.radio("Select Task Type", ["Classification", "Regression"], index=0, help="Select the task type")
+        task_type = st.radio("Select Task Type", ["Regression", "Classification"], index=0, help="Select the task type")
 
         if task_type == "Classification":
             st.write("Classification task selected")
@@ -126,43 +126,58 @@ if uploaded_file is not None:
 
         st.header("Xplain")
         X_train, X_test, y_train, y_test= process_data(DF)
+
+        # 1. Feature Dependence
         st.subheader("Feature Dependence")
-        plot_dependence= st.checkbox('Shap Summary')
-        if plot_dependence:
-            shap_feature= st.selectbox('Select The Feature', selected_cols)
+        shap_summary= st.checkbox('Shap Summary')
+        if shap_summary:
             summary_type= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
             summary_type= st.selectbox("Summary Type", ["Aggregate", "Detailed"])
+            f= shap_lime(cfg, X_train, X_test, y_train, y_test, {'plot_shap_summary': {"feature_names": X_test.columns}})
+            st.plotly_chart(f)
         
+        shap_dependency= st.checkbox('Shap Dependence')
+        if shap_dependency:
+            shap_feature_1= st.selectbox('Select The Feature', selected_cols)
+            shap_feature_color= st.selectbox('Color Feature', selected_cols)
+            shap_feature_2= st.selectbox('Select The Second Feature', selected_cols)
+            list_shap_2= st.selectbox(shap_feature_2, [i for i in shap_df[shap_feature_2].unique()])
+
+
+
+        # 2. Summary Plot
         summary_plot= st.checkbox('Summary Plot')
         if summary_plot:
             pass
 
+        # 3. Individual Prediction
         feature_contribution= st.checkbox("Feature Contribution")
         if feature_contribution:
             target_feature= st.selectbox('Select The Feature to See its Contribution', selected_cols)
             list_attr= st.selectbox(target_feature, [i for i in shap_df[target_feature].unique()])
+            pdp_feature= st.selectbox('Select the Partial Dependence Feature', selected_cols)
+            sorting= st.selectbox("Sorting", ["Absolute", "High to Low", "Low to High", "Importance"])
+            summary_type= st.selectbox("The Depth", [i+1 for i in range(len(selected_cols))])
             # TODO
             # Prediction Proba (handle both classification and regression cases)
             # contribution plot
             # partial dependence plot
             # contribution table
 
-        st.subheader('What If')
-        if st.button('SHAP & LIME Values'):
-            p= shap_lime(cfg, X_train, X_test, y_train, y_test, shap_feature= shap_feature)
-            if isinstance(p, list):
-                for _p in p:
-                    st.pyplot(_p)
-            else:
-                st.pyplot(p)
-
-
+        st.subheader('What If / Inference')
         # st.header('Inference')
         for column in selected_cols:
             user_input = st.text_input(column)
             user_input= utils.inf_proc(user_input)
             inf_df[column] = [user_input]
   
+        # p= shap_lime(cfg, X_train, X_test, y_train, y_test, shap_feature= shap_feature)
+        # if isinstance(p, list):
+        #     for _p in p:
+        #         st.pyplot(_p)
+        # else:
+        #     st.pyplot(p)
+
         st.write(inf_df)
         if st.button('Submit'):
             preds= inference(inf_df)

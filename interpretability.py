@@ -16,6 +16,8 @@ from sklearn.tree import DecisionTreeClassifier
 import matplotlib.pyplot as plt
 import pickle
 
+import plotly.express as px
+
 import matplotlib
 matplotlib.use('Agg')
 
@@ -60,6 +62,20 @@ class Interpretability:
     def plot_variable_importance(self):
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all)
         return plt
+    
+    def plot_shap_summary(self, feature_names):
+        shap_abs_values = [np.abs(sv) for sv in self.shap_values]
+        shap_sum = np.sum(np.stack(shap_abs_values), axis=0)
+        feature_importance = np.sum(shap_sum, axis=0)
+        
+        importance_df = pd.DataFrame({
+            'Feature': feature_names,
+            'Importance': feature_importance
+        })
+        importance_df = importance_df.sort_values(by='Importance', ascending=False)
+        fig = px.bar(importance_df, x='Feature', y='Importance', title='Feature Importance (Aggregated SHAP Values)')
+
+        return fig
 
     def plot_summary_label(self, label_index):
         if self.model_type == 'classification' and self.shap_values is not None:
@@ -107,8 +123,6 @@ def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs)
     
     interpreter = Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
     
-    plts.append(interpreter.plot_variable_importance())
-
     if kwargs:
         for method_name, method_params in kwargs.items():
             if hasattr(interpreter, method_name):
