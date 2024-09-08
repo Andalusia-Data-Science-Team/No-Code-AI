@@ -64,18 +64,19 @@ class Interpretability:
         return plt
     
     def plot_shap_summary(self, feature_names):
-        shap_abs_values = [np.abs(sv) for sv in self.shap_values]
-        shap_sum = np.sum(np.stack(shap_abs_values), axis=0)
-        feature_importance = np.sum(shap_sum, axis=0)
+        # shap_abs_values = [np.abs(sv) for sv in self.shap_values]
+        # shap_sum = np.sum(np.stack(shap_abs_values), axis=0)
+        # feature_importance = np.sum(shap_sum, axis=0)
         
-        importance_df = pd.DataFrame({
-            'Feature': feature_names,
-            'Importance': feature_importance
-        })
-        importance_df = importance_df.sort_values(by='Importance', ascending=False)
-        fig = px.bar(importance_df, x='Feature', y='Importance', title='Feature Importance (Aggregated SHAP Values)')
+        # importance_df = pd.DataFrame({
+        #     'Feature': feature_names,
+        #     'Importance': feature_importance
+        # })
+        # importance_df = importance_df.sort_values(by='Importance', ascending=False)
+        # fig = px.bar(importance_df, x='Feature', y='Importance', title='Feature Importance (Aggregated SHAP Values)')
 
-        return fig
+        # return fig
+        return self.shap_values
 
     def plot_summary_label(self, label_index):
         if self.model_type == 'classification' and self.shap_values is not None:
