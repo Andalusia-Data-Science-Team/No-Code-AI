@@ -27,11 +27,14 @@ class Interpretability:
         _model = model.named_steps['model']
         self.processor= model.named_steps['preprocessor']
         self.model_type = model_type
+        self.original_cols= X_train.columns.tolist()
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
-        cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
-        nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
-        self.all= cats + nums
+        self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
+        self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
+        self.all_feature_names= self.nums + self.cats
+        self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
+        # self.rest_of_cat_features= list(set(self.cats) - set(self.ohe_feature_names.tolist()))
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
@@ -52,7 +55,7 @@ class Interpretability:
         """
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
-            self.explainer = shap.TreeExplainer(self.model, feature_names= self.all)
+            self.explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
 
         elif isinstance(self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -69,10 +72,10 @@ class Interpretability:
         self.shap_values = self.explainer.shap_values(self.X_test)
                 
     def plot_variable_importance(self):
-        shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all)
+        shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
         return plt
     
-    def plot_shap_summary(self, feature_names, summary_type= 'agg', top_k= 10):
+    def plot_shap_summary(self, summary_type= 'agg', top_k= 10):
         # if classification:
         assert summary_type in ('agg', 'detailed'), f'the summary type {summary_type} is not supported!'
         # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
@@ -80,7 +83,15 @@ class Interpretability:
             shap_values= self.shap_values[0]
         else:
             shap_values = self.shap_values
+
+        shap_values_df= self.process_ohe(shap_values, self.all_feature_names, self.original_cols)
         num_classes = shap_values.shape[2]
+        if summary_type == 'agg':
+            shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
+            shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
+        else:
+            shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
+        
         tmp = {
             f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
             for class_idx in range(num_classes)
@@ -88,7 +99,7 @@ class Interpretability:
         importance_df = pd.DataFrame(tmp)
         importance_df['agg']= importance_df.sum(axis= 1)
         # feature_names should set the index
-        importance_df.index = importance_df.index.astype(str)
+        importance_df.index = self.original_cols
 
         if summary_type == 'agg':
             cls_imp= importance_df['agg'].sort_values(ascending= False)[:top_k]
@@ -122,12 +133,53 @@ class Interpretability:
 
     def plot_summary_label(self, label_index):
         if self.model_type == 'classification' and self.shap_values is not None:
-            shap.summary_plot(self.shap_values[label_index], self.X_test, feature_names= self.all)
+            shap.summary_plot(self.shap_values[label_index], self.X_test, feature_names= self.all_feature_names)
 
     def plot_dependence(self, feature_name):
         if self.shap_values is not None:
             shap.dependence_plot(feature_name, self.shap_values, self.X_test)
             return plt
+        
+    def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):
+        arrays_by_class = []
+
+        for class_num in range(num_cls):
+            cols_for_class = [col for col in shap_values_df.columns if f'_class_{class_num}' in col]
+            class_df = shap_values_df[cols_for_class]
+            class_array = class_df.to_numpy()
+            arrays_by_class.append(class_array)
+
+        result_array = np.stack(arrays_by_class, axis=-1)
+        return result_array
+
+
+    def agg_dataframes(self, df, class_nums):
+        dfs_by_class = {}
+        for class_num in range(class_nums):  # Since we know there are 3 classes (1, 2, 3)
+            cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
+            dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
+
+        dfs = list(dfs_by_class.values())
+        result = pd.DataFrame(index=dfs[0].index, columns=dfs[0].columns)
+        for df in dfs:
+            result = result.add(df, fill_value=0)
+
+        return result
+
+    def process_ohe(self, shap_values, feature_names, original_feature_names):
+        aggregated_shap = {}
+        feature_names= np.array(feature_names)
+        for name in original_feature_names:
+            if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
+                idx = np.where(feature_names == name)[0][0]
+                aggregated_shap[name] = shap_values[:, idx, :]
+            else:  # categorical feature
+                encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
+                # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
+                aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0], :] 
+                                                for f in encoded_features], axis=0)
+        data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
+        return pd.concat(data_flattened.values(), axis=1)
 
     def explain_with_lime(self, num_features=5, num_samples=1000):
         self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(
@@ -174,74 +226,3 @@ def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs)
                 plts.append(method(**method_params))
     
     return plts
-
-# import numpy as np
-# import pandas as pd
-# from sklearn.preprocessing import OneHotEncoder
-
-# def create_sample_data():
-#     """Create sample data for demonstration."""
-#     data = pd.DataFrame({
-#         'color': ['red', 'blue', 'green', 'red', 'blue'] * 20,
-#         'size': ['small', 'medium', 'large', 'small', 'large'] * 20,
-#         'shape': ['circle', 'square', 'triangle', 'circle', 'square'] * 20
-#     })
-#     return data
-
-# def encode_and_get_feature_names(data):
-#     """Encode the data using OneHotEncoder and get feature names."""
-#     encoder = OneHotEncoder(sparse=False)
-#     encoded_data = encoder.fit_transform(data)
-#     feature_names = encoder.get_feature_names_out()
-#     return encoded_data, feature_names
-
-# def aggregate_shap_values(shap_values, feature_names):
-#     """
-#     Aggregate SHAP values from one-hot encoded features back to original feature names.
-    
-#     :param shap_values: numpy array of shape (n_samples, n_features, n_classes)
-#     :param feature_names: array of one-hot encoded feature names from OneHotEncoder
-#     :return: pandas DataFrame with aggregated SHAP values
-#     """
-#     # Extract original feature names
-#     original_feature_names = np.unique([name.split('_')[0] for name in feature_names])
-    
-#     # Create a mapping from original feature names to their one-hot encoded columns
-#     feature_mapping = {name: [col for col in feature_names if col.startswith(name)] 
-#                        for name in original_feature_names}
-    
-#     # Initialize a dictionary to store aggregated SHAP values
-#     aggregated_shap = {name: np.zeros((shap_values.shape[0], shap_values.shape[2])) 
-#                        for name in original_feature_names}
-    
-#     # Aggregate SHAP values
-#     for orig_name, encoded_cols in feature_mapping.items():
-#         for col in encoded_cols:
-#             col_index = np.where(feature_names == col)[0][0]
-#             aggregated_shap[orig_name] += shap_values[:, col_index, :]
-    
-#     # Convert to DataFrame
-#     result = pd.DataFrame(aggregated_shap)
-    
-#     return result
-
-# # Example usage
-# np.random.seed(42)  # for reproducibility
-
-# # Create sample data
-# data = create_sample_data()
-
-# # Encode data and get feature names
-# encoded_data, feature_names = encode_and_get_feature_names(data)
-
-# # Create mock SHAP values (in practice, these would come from your model)
-# n_samples, n_features, n_classes = encoded_data.shape[0], encoded_data.shape[1], 3
-# shap_values = np.random.randn(n_samples, n_features, n_classes)
-
-# # Aggregate SHAP values
-# aggregated_shap_df = aggregate_shap_values(shap_values, feature_names)
-
-# print("Original feature names:", data.columns.tolist())
-# print("\nOne-hot encoded feature names:", feature_names.tolist())
-# print("\nAggregated SHAP values:")
-# print(aggregated_shap_df.head())
