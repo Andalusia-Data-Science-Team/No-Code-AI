@@ -131,10 +131,21 @@ if uploaded_file is not None:
         st.subheader("Feature Dependence")
         shap_summary= st.checkbox('Shap Summary')
         if shap_summary:
-            summary_type= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
+            depth= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
             summary_type= st.selectbox("Summary Type", ["Aggregate", "Detailed"])
-            f= shap_lime(cfg, X_train, X_test, y_train, y_test, {'plot_shap_summary': {"feature_names": X_test.columns}})
-            st.plotly_chart(f)
+            f= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_shap_summary= {"summary_type": summary_type, "top_k": depth})
+
+            if isinstance(f, list):
+                for _p in f:
+                    c= 0
+                    if isinstance(_p, dict):
+                        for _, val in _p.items():
+                            st.plotly_chart(_p[f'result_{c}'])
+                            c+=1
+                    else:
+                        st.plotly_chart(_p)
+            else:
+                st.plotly_chart(f)
         
         shap_dependency= st.checkbox('Shap Dependence')
         if shap_dependency:

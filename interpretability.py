@@ -75,9 +75,9 @@ class Interpretability:
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
         return plt
     
-    def plot_shap_summary(self, summary_type= 'agg', top_k= 10):
+    def plot_shap_summary(self, summary_type= 'Aggregate', top_k= 10):
         # if classification:
-        assert summary_type in ('agg', 'detailed'), f'the summary type {summary_type} is not supported!'
+        assert summary_type in ('Aggregate', 'Detailed'), f'the summary type {summary_type} is not supported!'
         # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
         if isinstance(self.shap_values, list):
             shap_values= self.shap_values[0]
@@ -86,7 +86,7 @@ class Interpretability:
 
         shap_values_df= self.process_ohe(shap_values, self.all_feature_names, self.original_cols)
         num_classes = shap_values.shape[2]
-        if summary_type == 'agg':
+        if summary_type == 'Aggregate':
             shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
             shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
         else:
@@ -97,12 +97,12 @@ class Interpretability:
             for class_idx in range(num_classes)
         }
         importance_df = pd.DataFrame(tmp)
-        importance_df['agg']= importance_df.sum(axis= 1)
+        importance_df['Aggregate']= importance_df.sum(axis= 1)
         # feature_names should set the index
         importance_df.index = self.original_cols
 
-        if summary_type == 'agg':
-            cls_imp= importance_df['agg'].sort_values(ascending= False)[:top_k]
+        if summary_type == 'Aggregate':
+            cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
             fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
             fig.update_layout(
                 xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
@@ -115,7 +115,7 @@ class Interpretability:
             return fig
         else:
             res= {}
-            # excluding the agg 
+            # excluding the Aggregate 
             for i in range(importance_df.shape[1] - 1):
                 cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
                 fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
