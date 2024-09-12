@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import pickle
 
 import plotly.express as px
+import plotly.graph_objects as go
 
 import matplotlib
 matplotlib.use('Agg')
@@ -24,8 +25,8 @@ matplotlib.use('Agg')
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
 
-        _model = model.named_steps['model']
-        self.processor= model.named_steps['preprocessor']
+        _model = model.pipeline.named_steps['model']
+        self.processor= model.pipeline.named_steps['preprocessor']
         self.model_type = model_type
         self.original_cols= X_train.columns.tolist()
         self.X_train = self.processor.transform(X_train)
@@ -34,7 +35,6 @@ class Interpretability:
         self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
         self.all_feature_names= self.nums + self.cats
         self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
-        # self.rest_of_cat_features= list(set(self.cats) - set(self.ohe_feature_names.tolist()))
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
@@ -42,6 +42,7 @@ class Interpretability:
         self.lime_explainer = None
         self.model= self.model_check(_model)
         self._compute_shap_values()
+        self.num_cls= self.shap_values.shape[2]
 
     @property
     def get_shape_vals(self):
@@ -70,6 +71,7 @@ class Interpretability:
 
 
         self.shap_values = self.explainer.shap_values(self.X_test)
+        self.base_value= self.explainer.expected_value
                 
     def plot_variable_importance(self):
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
@@ -130,6 +132,83 @@ class Interpretability:
                 res[f'result_{i}']= fig
             
             return res
+    def contribution_plot(self, idx, sort= 'high-to-low'):
+        figs = []
+        shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols)
+        shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)
+
+        for class_index in range(self.num_cls):
+            fig = self._contribution_plot(shap_values, self.original_cols, self.base_value, idx, sort, class_index)
+            figs.append(fig)
+
+        return figs
+
+    def _contribution_plot(self, shap_values, feature_names, base_value, instance_index, sort_order='high-to-low', class_index=1):
+
+        # Handle multi-dimensional SHAP values
+        instance_shap = shap_values[class_index][instance_index]
+        mean_shap = np.mean(shap_values[class_index], axis=0)
+        if isinstance(base_value, np.ndarray):
+            base_value = base_value[class_index]
+        
+        # Calculate the difference between instance and mean SHAP values
+        diff_shap = instance_shap - mean_shap
+        
+        # Sort the features based on the specified order
+        if sort_order == 'high-to-low':
+            sorted_idx = np.argsort(diff_shap)[::-1]
+        elif sort_order == 'low-to-high':
+            sorted_idx = np.argsort(diff_shap)
+        else:  # 'absolute'
+            sorted_idx = np.argsort(np.abs(diff_shap))[::-1]
+        
+        sorted_features = [feature_names[i] for i in sorted_idx]
+        sorted_values = diff_shap[sorted_idx]
+        
+        # Calculate final prediction value
+        final_value = base_value + np.sum(instance_shap)
+        mean_prediction = base_value + np.sum(mean_shap)
+        
+        # Create a DataFrame for the waterfall chart
+        df = pd.DataFrame({
+            'Feature': sorted_features + ['Final Prediction'],
+            'Value': np.concatenate([sorted_values, [final_value - mean_prediction]]),
+            'Text': [f'{v:.4f}' for v in sorted_values] + [f'{final_value - mean_prediction:.4f}']
+        })
+        
+        df['Measure'] = ['relative'] * len(sorted_features) + ['total']
+        
+        # Create the waterfall chart
+        fig = go.Figure(go.Waterfall(
+            name="Contribution", orientation="v",
+            measure=df['Measure'],
+            x=df['Feature'],
+            textposition="outside",
+            text=df['Text'],
+            y=df['Value'],
+            connector={"line":{"color":"rgb(63, 63, 63)"}},
+            decreasing={"marker":{"color":"#FF0000"}},
+            increasing={"marker":{"color":"#00FF00"}},
+            totals={"marker":{"color":"#0000FF"}},
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title=f"SHAP value differences for instance {instance_index}, class {class_index} vs. dataset mean<br>(Final prediction: {final_value:.4f}, Mean prediction: {mean_prediction:.4f})",
+            showlegend=False,
+            xaxis_title="",
+            yaxis_title="SHAP value difference",
+            xaxis={'categoryorder':'total ascending'},
+            waterfallgap=0.2,
+        )
+        
+        # Add a base line at zero (representing the mean prediction)
+        fig.add_shape(type="line",
+            x0=-0.5, y0=0, x1=len(sorted_features)-0.5, y1=0,
+            line=dict(color="red", width=2, dash="dot")
+        )
+        
+        return fig
 
     def plot_summary_label(self, label_index):
         if self.model_type == 'classification' and self.shap_values is not None:

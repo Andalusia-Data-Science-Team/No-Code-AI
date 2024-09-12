@@ -152,6 +152,12 @@ class Model:
             model_step
         ])
 
+    def reverse_label(self, y):
+        return self.label_encoder.inverse_transform(y)
+
+    def encode_label(self, y):
+        return self.label_encoder.transform(y)
+
     def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
         if y.dtypes == 'object':
@@ -168,6 +174,10 @@ class Model:
     def predict(self, X):
         X = self.preprocess(X)
         return self.model.predict(X)
+    
+    def predict_prob(self, X):
+        X= self.preprocess(X)
+        return self.model.predict_proba(X)
 
     def cls_metrics(self, X, y_true):
         y_pred = self.predict(X)
@@ -189,7 +199,7 @@ class Model:
 
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
-            pickle.dump(self.pipeline, f)
+            pickle.dump(self, f)
         print(f"Model saved successfully as: {file_path}")
 
 
@@ -201,6 +211,7 @@ def model(X_train, X_test, y_train, y_test, cfg):
         _model.save_model('model.pkl')
 
     if cfg['task_type'] == "Classification":
+        # p= _model.predict_prob(X_test)
         cm, acc= _model.cls_metrics(X_test, y_test)
         return acc, cm
 
@@ -211,16 +222,32 @@ def model(X_train, X_test, y_train, y_test, cfg):
     else:
         raise ValueError('invalid Task')
 
-def inference(X):
+def inference(X, proba= False):
     try:
         with open('model.pkl', 'rb') as f:
             _model= pickle.load(f)
 
-        pred= _model.predict(X)
-        return pred
+        if proba:
+            return _model.pipeline.predict_proba(X)
+        
+        return _model.pipeline.predict(X)
     except FileNotFoundError:
         print("Model file not found.")
 
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
 
+def get_corresponding_labels(y, encode= False):
+    try:
+        with open('model.pkl', 'rb') as f:
+            _model= pickle.load(f)
+        
+        if encode:
+            return _model.encode_label([y]) 
+        
+        return _model.reverse_label([y])
+    except FileNotFoundError:
+        print("Model file not found.")
+
+    except pickle.UnpicklingError:
+        print("Error loading the pickle model.")

@@ -1,12 +1,13 @@
 import streamlit as st
-import pandas as pd, numpy as np
+import pandas as pd, numpy as np, random
 import utils
-from models import model, inference
+from models import model, inference, get_corresponding_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import matplotlib
 from interpretability import shap_lime
+import plotly.graph_objects as go
 matplotlib.use('Agg')
 
 uploaded_file = st.file_uploader("Upload Data/Model")
@@ -102,16 +103,16 @@ if uploaded_file is not None:
                 st.write(report[1])
 
         if st.button('Plot Graphs'):
-            DF= process_data(DF, all= True)
+            _DF= process_data(DF, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
-            plot_data= utils.HeatMap(DF)
+            plot_data= utils.HeatMap(_DF)
             sns.heatmap(plot_data,ax = ax,cmap ="YlGnBu", linewidths = 0.1)
             st.pyplot(fig)
 
             # Display a scatter plot
             st.subheader('Correlation')
-            corr_values= utils.corr_plot(DF)
+            corr_values= utils.corr_plot(_DF)
             st.write(corr_values.sort_values(by= 'abs_correlation', ascending= False))
             fig, ax = plt.subplots()
             ax = corr_values.abs_correlation.hist(bins=50, figsize=(12, 8))
@@ -121,6 +122,7 @@ if uploaded_file is not None:
 
         checked_plots= {}
         inf_df = pd.DataFrame(columns=DF.drop([target], axis= 1).columns)
+        _inf_df= inf_df.copy()
         selected_cols= inf_df.columns
         shap_df= DF[selected_cols]
 
@@ -164,13 +166,28 @@ if uploaded_file is not None:
         # 3. Individual Prediction
         feature_contribution= st.checkbox("Feature Contribution")
         if feature_contribution:
+            target_cls= st.selectbox("Select the target class", list(y_train.unique()))
+            target_cls= get_corresponding_labels(target_cls, True)
+            if st.button("Generate Random Number"):
+                random_number = random.randint(1, len(X_test))
+                _dataframe= DF.iloc[[random_number]]
+                st.write(_dataframe)
+                proba_preds= inference(_dataframe, True)
+                st.write("Model Probability Prediciton")
+                st.write(proba_preds)
+                fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
+                st.plotly_chart(fig)
+                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, contribution_plot= {'idx': random_number})
+                for fig in figs:
+                    st.plotly_chart(fig)
+
             target_feature= st.selectbox('Select The Feature to See its Contribution', selected_cols)
             list_attr= st.selectbox(target_feature, [i for i in shap_df[target_feature].unique()])
             pdp_feature= st.selectbox('Select the Partial Dependence Feature', selected_cols)
             sorting= st.selectbox("Sorting", ["Absolute", "High to Low", "Low to High", "Importance"])
             summary_type= st.selectbox("The Depth", [i+1 for i in range(len(selected_cols))])
             # TODO
-            # Prediction Proba (handle both classification and regression cases)
+            
             # contribution plot
             # partial dependence plot
             # contribution table
