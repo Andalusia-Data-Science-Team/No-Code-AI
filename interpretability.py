@@ -15,6 +15,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 import matplotlib.pyplot as plt
 import pickle
+import logging
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -26,6 +27,8 @@ matplotlib.use('Agg')
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
 
+        logging.basicConfig(filename='Xplain.log', level=logging.INFO, format='%(asctime)s - %(message)s')
+        self.logger = logging.getLogger(__name__)
         _model = model.pipeline.named_steps['model']
         self.processor= model.pipeline.named_steps['preprocessor']
         self.model_type = model_type
@@ -58,7 +61,7 @@ class Interpretability:
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
             self.explainer = shap.TreeExplainer(self.model, self.X_train.toarray(), feature_names= self.all_feature_names)
-            self.explainer2 = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
+            self.wrong_explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
 
         elif isinstance(self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -72,12 +75,12 @@ class Interpretability:
             self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
 
 
-        # self.shap_values = self.explainer.shap_values(self.X_test.toarray())
-        self.shap_values2 = self.explainer2.shap_values(self.X_test)
+        self.shap_values = self.explainer.shap_values(self.X_test.toarray())
+        self.wrong_shap_values = self.wrong_explainer.shap_values(self.X_test)
         # print(self.shap_values2)
         # print('////////////////////')
         explainer = shap.Explainer(self.model, self.X_train.toarray())
-        self.shap_values = explainer(self.X_test.toarray())
+        self.shap_values_explainer = explainer(self.X_test.toarray())
         # print(self.shap_values.values)
         
         self.base_value= self.explainer.expected_value
@@ -92,65 +95,71 @@ class Interpretability:
         # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
         if isinstance(self.shap_values, list):
             shap_values= self.shap_values[0]
-            shap_values2= self.shap_values2[0]
+            shap_values_explainer= self.shap_values_explainer[0]
+            wrong_shap_values= self.wrong_shap_values[0]
         else:
             shap_values = self.shap_values
-            shap_values2 = self.shap_values2
+            wrong_shap_values= self.wrong_shap_values
+            shap_values_explainer = self.shap_values_explainer
 
         # print(shap_values.values)
         # print("dasdsadasdasdas")
         # print(shap_values2)
-        shap_values_df= self.process_ohe(shap_values.values, self.all_feature_names, self.original_cols)
-        print("AHBS")
-        shap_values_df2= self.process_ohe(shap_values2, self.all_feature_names, self.original_cols)
+        self.logger.info(f"Shap Value for TreeExplainer is \n{shap_values}")
+        self.logger.info(f"Shap Value for Explainer is \n{shap_values_explainer.values}")
+        return shap_values, shap_values_explainer, wrong_shap_values, self.all_feature_names, self.original_cols
+    
+        # shap_values_df= self.process_ohe(shap_values, self.all_feature_names, self.original_cols)
+        # print("AHBS")
+        # shap_values_df= self.process_ohe(shap_values_explainer.values, self.all_feature_names, self.original_cols)
 
-        num_classes = shap_values.shape[2]
+        # num_classes = shap_values.shape[2]
 
-        if summary_type == 'Aggregate':
-            shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
-            shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
-        else:
-            shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
+        # if summary_type == 'Aggregate':
+        #     shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
+        #     shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
+        # else:
+        #     shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
         
-        tmp = {
-            f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
-            for class_idx in range(num_classes)
-        }
+        # tmp = {
+        #     f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
+        #     for class_idx in range(num_classes)
+        # }
         
-        importance_df = pd.DataFrame(tmp)
-        importance_df['Aggregate']= importance_df.sum(axis= 1)
-        # feature_names should set the index
-        importance_df.index = self.original_cols
+        # importance_df = pd.DataFrame(tmp)
+        # importance_df['Aggregate']= importance_df.sum(axis= 1)
+        # # feature_names should set the index
+        # importance_df.index = self.original_cols
 
-        if summary_type == 'Aggregate':
-            cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
-            fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
-            fig.update_layout(
-                xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
-                height=600, 
-                xaxis_title="Feature Importance",
-                yaxis_title="Features",
-                yaxis={'categoryorder':'total ascending'},
-                showlegend=False
-            )
-            return fig
-        else:
-            res= {}
-            # excluding the Aggregate 
-            for i in range(importance_df.shape[1] - 1):
-                cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
-                fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
-                fig.update_layout(
-                    xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
-                    height=600, 
-                    xaxis_title="Feature Importance",
-                    yaxis_title="Features",
-                    yaxis={'categoryorder':'total ascending'},
-                    showlegend=False
-                )
-                res[f'result_{i}']= fig
+        # if summary_type == 'Aggregate':
+        #     cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
+        #     fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
+        #     fig.update_layout(
+        #         xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
+        #         height=600, 
+        #         xaxis_title="Feature Importance",
+        #         yaxis_title="Features",
+        #         yaxis={'categoryorder':'total ascending'},
+        #         showlegend=False
+        #     )
+        #     return fig
+        # else:
+        #     res= {}
+        #     # excluding the Aggregate 
+        #     for i in range(importance_df.shape[1] - 1):
+        #         cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
+        #         fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
+        #         fig.update_layout(
+        #             xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
+        #             height=600, 
+        #             xaxis_title="Feature Importance",
+        #             yaxis_title="Features",
+        #             yaxis={'categoryorder':'total ascending'},
+        #             showlegend=False
+        #         )
+        #         res[f'result_{i}']= fig
             
-            return res
+        #     return res
     def contribution_plot(self, idx, sort= 'high-to-low'):
         figs = []
         shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols)
