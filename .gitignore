@@ -4,6 +4,6 @@ wandb/
 
 *.pkl
 test.py
-*_.ipynb
+*.ipynb
 *.bat
 *.csv
