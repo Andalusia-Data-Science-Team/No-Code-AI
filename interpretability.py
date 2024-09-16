@@ -21,6 +21,7 @@ import plotly.graph_objects as go
 
 import matplotlib
 matplotlib.use('Agg')
+# np.set_printoptions(precision=7, suppress=False)
 
 class Interpretability:
     def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
@@ -56,7 +57,8 @@ class Interpretability:
         """
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
-            self.explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
+            self.explainer = shap.TreeExplainer(self.model, self.X_train.toarray(), feature_names= self.all_feature_names)
+            self.explainer2 = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
 
         elif isinstance(self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -70,7 +72,14 @@ class Interpretability:
             self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
 
 
-        self.shap_values = self.explainer.shap_values(self.X_test)
+        # self.shap_values = self.explainer.shap_values(self.X_test.toarray())
+        self.shap_values2 = self.explainer2.shap_values(self.X_test)
+        # print(self.shap_values2)
+        # print('////////////////////')
+        explainer = shap.Explainer(self.model, self.X_train.toarray())
+        self.shap_values = explainer(self.X_test.toarray())
+        # print(self.shap_values.values)
+        
         self.base_value= self.explainer.expected_value
                 
     def plot_variable_importance(self):
@@ -83,11 +92,20 @@ class Interpretability:
         # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
         if isinstance(self.shap_values, list):
             shap_values= self.shap_values[0]
+            shap_values2= self.shap_values2[0]
         else:
             shap_values = self.shap_values
+            shap_values2 = self.shap_values2
 
-        shap_values_df= self.process_ohe(shap_values, self.all_feature_names, self.original_cols)
+        # print(shap_values.values)
+        # print("dasdsadasdasdas")
+        # print(shap_values2)
+        shap_values_df= self.process_ohe(shap_values.values, self.all_feature_names, self.original_cols)
+        print("AHBS")
+        shap_values_df2= self.process_ohe(shap_values2, self.all_feature_names, self.original_cols)
+
         num_classes = shap_values.shape[2]
+
         if summary_type == 'Aggregate':
             shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
             shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
@@ -98,6 +116,7 @@ class Interpretability:
             f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
             for class_idx in range(num_classes)
         }
+        
         importance_df = pd.DataFrame(tmp)
         importance_df['Aggregate']= importance_df.sum(axis= 1)
         # feature_names should set the index
@@ -210,14 +229,10 @@ class Interpretability:
         
         return fig
 
-    def plot_summary_label(self, label_index):
-        if self.model_type == 'classification' and self.shap_values is not None:
-            shap.summary_plot(self.shap_values[label_index], self.X_test, feature_names= self.all_feature_names)
+    def plot_contribution(self):
+        print(self.shap_values_waterfall[:, :, 0][0].shape)
+        shap.waterfall_plot(self.shap_values_waterfall[:, :, 0][0])
 
-    def plot_dependence(self, feature_name):
-        if self.shap_values is not None:
-            shap.dependence_plot(feature_name, self.shap_values, self.X_test)
-            return plt
         
     def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):
         arrays_by_class = []
@@ -246,17 +261,24 @@ class Interpretability:
         return result
 
     def process_ohe(self, shap_values, feature_names, original_feature_names):
+        # TODO: Fix
+        # shap_values= shap_values.astype(np.float32)
+        # print(shap_values)
         aggregated_shap = {}
         feature_names= np.array(feature_names)
         for name in original_feature_names:
             if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
                 idx = np.where(feature_names == name)[0][0]
                 aggregated_shap[name] = shap_values[:, idx, :]
+                # print(shap_values[:, idx, :])
             else:  # categorical feature
                 encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
                 # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
                 aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0], :] 
                                                 for f in encoded_features], axis=0)
+                print(name)
+                print([shap_values[:, np.where(feature_names == f)[0][0], :] 
+                                                for f in encoded_features])
         data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
         return pd.concat(data_flattened.values(), axis=1)
 
