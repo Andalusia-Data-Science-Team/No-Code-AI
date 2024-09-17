@@ -1,4 +1,5 @@
 import shap
+
 import lime
 import lime.lime_tabular
 import pandas as pd, numpy as np
@@ -25,10 +26,11 @@ matplotlib.use('Agg')
 # np.set_printoptions(precision=7, suppress=False)
 
 class Interpretability:
-    def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None):
+    def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None, apply_prior= False):
 
         logging.basicConfig(filename='Xplain.log', level=logging.INFO, format='%(asctime)s - %(message)s')
         self.logger = logging.getLogger(__name__)
+        self.apply_prior= apply_prior
         _model = model.pipeline.named_steps['model']
         self.processor= model.pipeline.named_steps['preprocessor']
         self.model_type = model_type
@@ -60,8 +62,11 @@ class Interpretability:
         """
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
-            self.explainer = shap.TreeExplainer(self.model, self.X_train.toarray(), feature_names= self.all_feature_names)
-            self.wrong_explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
+            if self.apply_prior:
+                # First check if you can fully replace explainer
+                self.explainer = shap.TreeExplainer(self.model, self.X_train.toarray(), feature_names= self.all_feature_names)
+            else:
+                self.explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
 
         elif isinstance(self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -75,12 +80,14 @@ class Interpretability:
             self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
 
 
-        self.shap_values = self.explainer.shap_values(self.X_test.toarray())
-        self.wrong_shap_values = self.wrong_explainer.shap_values(self.X_test)
+        if self.apply_prior:
+            self.shap_values = self.explainer.shap_values(self.X_test.toarray())
+        else:
+            self.shap_values = self.explainer.shap_values(self.X_test)
         # print(self.shap_values2)
         # print('////////////////////')
-        explainer = shap.Explainer(self.model, self.X_train.toarray())
-        self.shap_values_explainer = explainer(self.X_test.toarray())
+        explainer = shap.Explainer(self.model)
+        self.shap_values_explainer = explainer(self.X_test)
         # print(self.shap_values.values)
         
         self.base_value= self.explainer.expected_value
@@ -96,70 +103,63 @@ class Interpretability:
         if isinstance(self.shap_values, list):
             shap_values= self.shap_values[0]
             shap_values_explainer= self.shap_values_explainer[0]
-            wrong_shap_values= self.wrong_shap_values[0]
         else:
             shap_values = self.shap_values
-            wrong_shap_values= self.wrong_shap_values
             shap_values_explainer = self.shap_values_explainer
 
-        # print(shap_values.values)
-        # print("dasdsadasdasdas")
-        # print(shap_values2)
         self.logger.info(f"Shap Value for TreeExplainer is \n{shap_values}")
         self.logger.info(f"Shap Value for Explainer is \n{shap_values_explainer.values}")
-        return shap_values, shap_values_explainer, wrong_shap_values, self.all_feature_names, self.original_cols
-    
-        # shap_values_df= self.process_ohe(shap_values, self.all_feature_names, self.original_cols)
-        # print("AHBS")
-        # shap_values_df= self.process_ohe(shap_values_explainer.values, self.all_feature_names, self.original_cols)
+        # return shap_values, shap_values_explainer, wrong_shap_values, self.all_feature_names, self.original_cols
 
-        # num_classes = shap_values.shape[2]
+        shap_values_df= self.process_ohe(shap_values_explainer.values, self.all_feature_names, self.original_cols)
 
-        # if summary_type == 'Aggregate':
-        #     shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
-        #     shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
-        # else:
-        #     shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
+        num_classes = shap_values.shape[2]
+
+        if summary_type == 'Aggregate':
+            shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
+            shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
+        else:
+            shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
         
-        # tmp = {
-        #     f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
-        #     for class_idx in range(num_classes)
-        # }
+        tmp = {
+            f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
+            for class_idx in range(num_classes)
+        }
         
-        # importance_df = pd.DataFrame(tmp)
-        # importance_df['Aggregate']= importance_df.sum(axis= 1)
-        # # feature_names should set the index
-        # importance_df.index = self.original_cols
+        importance_df = pd.DataFrame(tmp)
+        importance_df['Aggregate']= importance_df.sum(axis= 1)
+        # feature_names should set the index
+        importance_df.index = self.original_cols
 
-        # if summary_type == 'Aggregate':
-        #     cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
-        #     fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
-        #     fig.update_layout(
-        #         xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
-        #         height=600, 
-        #         xaxis_title="Feature Importance",
-        #         yaxis_title="Features",
-        #         yaxis={'categoryorder':'total ascending'},
-        #         showlegend=False
-        #     )
-        #     return fig
-        # else:
-        #     res= {}
-        #     # excluding the Aggregate 
-        #     for i in range(importance_df.shape[1] - 1):
-        #         cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
-        #         fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
-        #         fig.update_layout(
-        #             xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
-        #             height=600, 
-        #             xaxis_title="Feature Importance",
-        #             yaxis_title="Features",
-        #             yaxis={'categoryorder':'total ascending'},
-        #             showlegend=False
-        #         )
-        #         res[f'result_{i}']= fig
+        if summary_type == 'Aggregate':
+            cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
+            fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
+            fig.update_layout(
+                xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
+                height=600, 
+                xaxis_title="Feature Importance",
+                yaxis_title="Features",
+                yaxis={'categoryorder':'total ascending'},
+                showlegend=False
+            )
+            return fig
+        else:
+            res= {}
+            # excluding the Aggregate 
+            for i in range(importance_df.shape[1] - 1):
+                cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
+                fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
+                fig.update_layout(
+                    xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
+                    height=600, 
+                    xaxis_title="Feature Importance",
+                    yaxis_title="Features",
+                    yaxis={'categoryorder':'total ascending'},
+                    showlegend=False
+                )
+                res[f'result_{i}']= fig
             
-        #     return res
+            return res
     def contribution_plot(self, idx, sort= 'high-to-low'):
         figs = []
         shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols)
@@ -238,9 +238,12 @@ class Interpretability:
         
         return fig
 
-    def plot_contribution(self):
-        print(self.shap_values_waterfall[:, :, 0][0].shape)
-        shap.waterfall_plot(self.shap_values_waterfall[:, :, 0][0])
+    def plot_contribution(self, idx):
+        # aggregation and postprocessing have conflict; as waterfall requires Eplainer object
+        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
+
+        shap.waterfall_plot(self.shap_values_explainer[:, :, 0][idx], show= False)
+        return plt
 
         
     def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):
@@ -270,24 +273,19 @@ class Interpretability:
         return result
 
     def process_ohe(self, shap_values, feature_names, original_feature_names):
-        # TODO: Fix
-        # shap_values= shap_values.astype(np.float32)
-        # print(shap_values)
+
         aggregated_shap = {}
         feature_names= np.array(feature_names)
         for name in original_feature_names:
             if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
                 idx = np.where(feature_names == name)[0][0]
                 aggregated_shap[name] = shap_values[:, idx, :]
-                # print(shap_values[:, idx, :])
             else:  # categorical feature
                 encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
                 # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
                 aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0], :] 
                                                 for f in encoded_features], axis=0)
-                print(name)
-                print([shap_values[:, np.where(feature_names == f)[0][0], :] 
-                                                for f in encoded_features])
+
         data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
         return pd.concat(data_flattened.values(), axis=1)
 
@@ -312,7 +310,7 @@ class Interpretability:
         else:
             return model
 
-def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs):
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, apply_prior= False, **kwargs):
     plts = []
     
     if m is None:
@@ -326,7 +324,7 @@ def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, **kwargs)
             print("Error loading the pickle model.")
             return plts
     
-    interpreter = Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test)
+    interpreter = Interpretability(m, cfg['task_type'], X_train, X_test, y_train, y_test, apply_prior= apply_prior)
     
     if kwargs:
         for method_name, method_params in kwargs.items():

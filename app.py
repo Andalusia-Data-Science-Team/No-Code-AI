@@ -177,9 +177,9 @@ if uploaded_file is not None:
                 st.write(proba_preds)
                 fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
                 st.plotly_chart(fig)
-                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, contribution_plot= {'idx': random_number})
+                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number})
                 for fig in figs:
-                    st.plotly_chart(fig)
+                    st.pyplot(fig)
 
             target_feature= st.selectbox('Select The Feature to See its Contribution', selected_cols)
             list_attr= st.selectbox(target_feature, [i for i in shap_df[target_feature].unique()])
