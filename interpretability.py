@@ -240,10 +240,13 @@ class Interpretability:
 
     def plot_contribution(self, idx):
         # aggregation and postprocessing have conflict; as waterfall requires Eplainer object
-        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
+        # shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
+        # print(getattr(self.shap_values_explainer, "lower_bounds", None))
+        # print(getattr(self.shap_values_explainer, "upper_bounds", None))
+        # shap.waterfall_plot(self.shap_values_explainer[:, :, 0][idx], show= False)
+        # return plt
 
-        shap.waterfall_plot(self.shap_values_explainer[:, :, 0][idx], show= False)
-        return plt
+        return self.shap_values_explainer
 
         
     def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):

@@ -258,7 +258,22 @@ def waterfall(values,
               shap_values_data,
               feature_names, 
               max_display=10, 
-              show=True):
+              show=False,
+              lower_bounds= None,
+              upper_bounds= None):
+    
+    """
+    For shap_values is an object of Explanation:
+
+    sv_shape: shap_values.shape
+    shap_values_base: shap_values.base_values
+    shap_values_display_data: shap_values.display_data
+    shap_values_data: shap_values.data
+    feature_names: shap_values.feature_names
+    values: shap_values.values
+    lower_bounds = getattr(shap_values, "lower_bounds", None)
+    upper_bounds = getattr(shap_values, "upper_bounds", None)
+    """
 
     # Turn off interactive plot
     if show is False:
@@ -278,8 +293,6 @@ def waterfall(values,
     base_values = float(shap_values_base)
     features = shap_values_display_data if shap_values_display_data is not None else shap_values_data
     # feature_names = shap_values.feature_names
-    lower_bounds = getattr(shap_values, "lower_bounds", None)
-    upper_bounds = getattr(shap_values, "upper_bounds", None)
     # values = shap_values.values
 
     # unwrap pandas series
