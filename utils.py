@@ -251,7 +251,7 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
             else:
                 return 'No Fix'
 
-def waterfall(values, 
+def my_waterfall(values, 
               sv_shape, 
               shap_values_base, 
               shap_values_display_data, 
@@ -281,14 +281,12 @@ def waterfall(values,
 
     # make sure we only have a single explanation to plot
     # sv_shape = shap_values.shape
-    if len(sv_shape) != 1:
-        emsg = (
-            "The waterfall plot can currently only plot a single explanation, but a "
-            f"matrix of explanations (shape {sv_shape}) was passed! Perhaps try "
-            "`shap.plots.waterfall(shap_values[0])` or for multi-output models, "
-            "try `shap.plots.waterfall(shap_values[0, 0])`."
-        )
-        raise ValueError(emsg)
+    # if len(sv_shape) != 1:
+    #     emsg = (
+    #         "The my_waterfall plot can currently only plot a single explanation, but a "
+    #         f"matrix of explanations (shape {sv_shape}) was passed!"
+    #     )
+    #     raise ValueError(emsg)
 
     base_values = float(shap_values_base)
     features = shap_values_display_data if shap_values_display_data is not None else shap_values_data

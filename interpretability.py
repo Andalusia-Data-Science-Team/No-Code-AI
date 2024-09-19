@@ -3,7 +3,7 @@ import shap
 import lime
 import lime.lime_tabular
 import pandas as pd, numpy as np
-from models import GridSearchModel
+from utils import my_waterfall
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -37,6 +37,7 @@ class Interpretability:
         self.original_cols= X_train.columns.tolist()
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
+        self.base_data= X_test
         self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
         self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
         self.all_feature_names= self.nums + self.cats
@@ -84,14 +85,19 @@ class Interpretability:
             self.shap_values = self.explainer.shap_values(self.X_test.toarray())
         else:
             self.shap_values = self.explainer.shap_values(self.X_test)
-        # print(self.shap_values2)
-        # print('////////////////////')
+
         explainer = shap.Explainer(self.model)
         self.shap_values_explainer = explainer(self.X_test)
-        # print(self.shap_values.values)
         
         self.base_value= self.explainer.expected_value
-                
+            # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
+        if isinstance(self.shap_values, list):
+            self.shap_values= self.shap_values[0]
+            self.shap_values_explainer= self.shap_values_explainer[0]
+        else:
+            self.shap_values = self.shap_values
+            self.shap_values_explainer = self.shap_values_explainer
+
     def plot_variable_importance(self):
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
         return plt
@@ -99,21 +105,14 @@ class Interpretability:
     def plot_shap_summary(self, summary_type= 'Aggregate', top_k= 10):
         # if classification:
         assert summary_type in ('Aggregate', 'Detailed'), f'the summary type {summary_type} is not supported!'
-        # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
-        if isinstance(self.shap_values, list):
-            shap_values= self.shap_values[0]
-            shap_values_explainer= self.shap_values_explainer[0]
-        else:
-            shap_values = self.shap_values
-            shap_values_explainer = self.shap_values_explainer
 
-        self.logger.info(f"Shap Value for TreeExplainer is \n{shap_values}")
-        self.logger.info(f"Shap Value for Explainer is \n{shap_values_explainer.values}")
+        self.logger.info(f"Shap Value for TreeExplainer is \n{self.shap_values}")
+        self.logger.info(f"Shap Value for Explainer is \n{self.shap_values_explainer.values}")
         # return shap_values, shap_values_explainer, wrong_shap_values, self.all_feature_names, self.original_cols
 
-        shap_values_df= self.process_ohe(shap_values_explainer.values, self.all_feature_names, self.original_cols)
+        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
 
-        num_classes = shap_values.shape[2]
+        num_classes = self.shap_values.shape[2]
 
         if summary_type == 'Aggregate':
             shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
@@ -122,7 +121,7 @@ class Interpretability:
             shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
         
         tmp = {
-            f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
+            f'class {class_idx}': np.mean(np.abs(self.shap_values[:, :, class_idx]), axis=0)
             for class_idx in range(num_classes)
         }
         
@@ -237,8 +236,46 @@ class Interpretability:
         )
         
         return fig
+    
+    def process_explainer_values(self, explainer_values, feature_names, original_feature_names, base_data):
+        # https://github.com/shap/shap/issues/1252
+        # For a classifier that gives us the shap values it's recommended to check the positive class,  not the negatives
+        sv_shape= explainer_values.shape 
+        shap_values_base= explainer_values.base_values   
+        shap_values_display_data= explainer_values.display_data  
+                                                            
+        values= explainer_values.values  
+        lower_bounds = getattr(explainer_values, "lower_bounds", None)   
+                                                                    
+                                                                    
+        upper_bounds = getattr(explainer_values, "upper_bounds", None)
 
-    def plot_contribution(self, idx):
+        aggregated_shap = {}
+        feature_names= np.array(feature_names)
+        for name in original_feature_names:
+            if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
+                idx = np.where(feature_names == name)[0][0]
+                aggregated_shap[f'{name}_shape_values'] = values[:, idx, :]
+                if shap_values_display_data is not None:
+                    raise NotImplementedError("can't be used")
+
+            else:  # categorical feature
+                encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
+                # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
+                aggregated_shap[f'{name}_shape_values'] = np.sum([values[:, np.where(feature_names == f)[0][0], :] 
+                                                for f in encoded_features], axis=0)
+
+                if shap_values_display_data is not None:
+                    raise NotImplementedError("can't be used")
+                    
+        data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
+        agg_df= pd.concat(data_flattened.values(), axis=1)
+        agg_df= agg_df.set_index(base_data.index)
+        _df= pd.concat([agg_df, base_data], axis=1)
+        assert len(_df) == len(self.base_data), "Miss dimension between the shap and base data."
+        return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
+
+    def plot_contribution(self, idx, agg= True):
         # aggregation and postprocessing have conflict; as waterfall requires Eplainer object
         # shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
         # print(getattr(self.shap_values_explainer, "lower_bounds", None))
@@ -246,7 +283,34 @@ class Interpretability:
         # shap.waterfall_plot(self.shap_values_explainer[:, :, 0][idx], show= False)
         # return plt
 
-        return self.shap_values_explainer
+        # takes the data, slice based on idx and class, then pass it to the
+        # return self.shap_values_explainer
+        shap_values_df, sv_shape, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
+                                                                                                  self.all_feature_names, 
+                                                                                                  self.original_cols, 
+                                                                                                  self.base_data)
+        
+        sv_shape= sv_shape[1]
+        if not agg:
+            plts= []
+            for i in range(self.num_cls):
+                shap_values_base= shap_values_base[idx][i]
+                shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)[:,:,i][idx]
+            
+                plts.append(my_waterfall(shap_values, sv_shape, shap_values_base, None, shap_values_df, self.original_cols, 
+                                lower_bounds= lower_bounds, upper_bounds= upper_bounds))
+                
+            
+            return plts
+        else:
+            shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
+            _shap_values_df= self.agg_dataframes(shap_values_df, self.num_cls)
+            shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)[idx]
+            return shap_values_df, _shap_values_df, self.shap_values_explainer, self.all_feature_names, self.original_cols
+            df_idx= self.base_data.iloc[idx]
+            return my_waterfall(shap_values, sv_shape, shap_values_base, None, df_idx, self.original_cols, 
+                                lower_bounds= lower_bounds, upper_bounds= upper_bounds)
+
 
         
     def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):
@@ -264,7 +328,7 @@ class Interpretability:
 
     def agg_dataframes(self, df, class_nums):
         dfs_by_class = {}
-        for class_num in range(class_nums):  # Since we know there are 3 classes (1, 2, 3)
+        for class_num in range(class_nums):
             cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
             dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
 
