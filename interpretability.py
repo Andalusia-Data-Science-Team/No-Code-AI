@@ -325,6 +325,16 @@ class Interpretability:
         result_array = np.stack(arrays_by_class, axis=-1)
         return result_array
 
+    def aggregate_class_columns(self, df):
+
+        features= df.columns.tolist()
+        aggregated_df = pd.DataFrame()
+
+        for feature in features:
+            matching_columns = [col for col in df.columns if col.startswith(f'{feature}_class_')]
+            
+            aggregated_df[f'{feature}_aggregated'] = df[matching_columns].sum(axis=1)
+        return aggregated_df
 
     def agg_dataframes(self, df, class_nums):
         dfs_by_class = {}
