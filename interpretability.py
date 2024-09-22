@@ -122,7 +122,7 @@ class Interpretability:
 
         if summary_type == 'Aggregate':
             shap_values_df= self.aggregate_features(shap_values_df, num_classes)
-            return shap_values_df
+            # return shap_values_df
             shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
         else:
             shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
@@ -357,14 +357,14 @@ class Interpretability:
     #     return result
 
     def aggregate_features(self, df, num_classes):
+        """
+        Aggregate the OHE
+        """
         class_suffixes = tuple(f'_class_{i}' for i in range(num_classes))
-        print(class_suffixes)
-        features = set('_'.join(col.split('_')[:-2]) for col in df.columns if col.endswith(class_suffixes))
+        features = set('_'.join(col.split('_')[:-2]) for col in df.columns if col.endswith(class_suffixes)) # that's redundunt using self.original would suffice.
         
         df_agg = pd.DataFrame()
         
-        print(features)
-        print(df.columns)
         for feature in features:
             cols_to_agg = [col for col in df.columns if col.startswith(feature) and col.endswith(class_suffixes)]
             df_agg[f'{feature}_agg'] = df[cols_to_agg].sum(axis=1)
