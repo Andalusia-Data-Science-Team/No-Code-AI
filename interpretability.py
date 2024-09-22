@@ -102,6 +102,12 @@ class Interpretability:
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
         return plt
     
+    def normalize_feature_importance_column_wise(self, df):
+        df_abs = df.abs()
+        col_sums = df_abs.sum(axis=0)
+        df_normalized = df_abs.div(col_sums, axis=1)
+        return df_normalized
+    
     def plot_shap_summary(self, summary_type= 'Aggregate', top_k= 10):
         # if classification:
         assert summary_type in ('Aggregate', 'Detailed'), f'the summary type {summary_type} is not supported!'
@@ -115,13 +121,14 @@ class Interpretability:
         num_classes = self.shap_values.shape[2]
 
         if summary_type == 'Aggregate':
-            shap_values_df= self.agg_dataframes(shap_values_df, num_classes)
+            shap_values_df= self.aggregate_features(shap_values_df, num_classes)
+            return shap_values_df
             shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
         else:
             shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
         
         tmp = {
-            f'class {class_idx}': np.mean(np.abs(self.shap_values[:, :, class_idx]), axis=0)
+            f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
             for class_idx in range(num_classes)
         }
         
@@ -304,7 +311,7 @@ class Interpretability:
             return plts
         else:
             shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
-            _shap_values_df= self.agg_dataframes(shap_values_df, self.num_cls)
+            _shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
             shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)[idx]
             return shap_values_df, _shap_values_df, self.shap_values_explainer, self.all_feature_names, self.original_cols
             df_idx= self.base_data.iloc[idx]
@@ -325,29 +332,44 @@ class Interpretability:
         result_array = np.stack(arrays_by_class, axis=-1)
         return result_array
 
-    def aggregate_class_columns(self, df):
+    # def aggregate_class_columns(self, df):
 
-        features= df.columns.tolist()
-        aggregated_df = pd.DataFrame()
+    #     features= df.columns.tolist()
+    #     aggregated_df = pd.DataFrame()
 
-        for feature in features:
-            matching_columns = [col for col in df.columns if col.startswith(f'{feature}_class_')]
+    #     for feature in features:
+    #         matching_columns = [col for col in df.columns if col.startswith(f'{feature}_class_')]
             
-            aggregated_df[f'{feature}_aggregated'] = df[matching_columns].sum(axis=1)
-        return aggregated_df
+    #         aggregated_df[f'{feature}_aggregated'] = df[matching_columns].sum(axis=1)
+    #     return aggregated_df
 
-    def agg_dataframes(self, df, class_nums):
-        dfs_by_class = {}
-        for class_num in range(class_nums):
-            cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
-            dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
+    # def agg_dataframes(self, df, class_nums):
+    #     dfs_by_class = {}
+    #     for class_num in range(class_nums):
+    #         cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
+    #         dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
 
-        dfs = list(dfs_by_class.values())
-        result = pd.DataFrame(index=dfs[0].index, columns=dfs[0].columns)
-        for df in dfs:
-            result = result.add(df, fill_value=0)
+    #     dfs = list(dfs_by_class.values())
+    #     result = pd.DataFrame(index=dfs[0].index, columns=dfs[0].columns)
+    #     for df in dfs:
+    #         result = result.add(df, fill_value=0)
 
-        return result
+    #     return result
+
+    def aggregate_features(self, df, num_classes):
+        class_suffixes = tuple(f'_class_{i}' for i in range(num_classes))
+        print(class_suffixes)
+        features = set('_'.join(col.split('_')[:-2]) for col in df.columns if col.endswith(class_suffixes))
+        
+        df_agg = pd.DataFrame()
+        
+        print(features)
+        print(df.columns)
+        for feature in features:
+            cols_to_agg = [col for col in df.columns if col.startswith(feature) and col.endswith(class_suffixes)]
+            df_agg[f'{feature}_agg'] = df[cols_to_agg].sum(axis=1)
+        
+        return df_agg
 
     def process_ohe(self, shap_values, feature_names, original_feature_names):
 
