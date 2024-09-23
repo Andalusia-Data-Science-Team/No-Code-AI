@@ -3,7 +3,7 @@ import shap
 import lime
 import lime.lime_tabular
 import pandas as pd, numpy as np
-from utils import my_waterfall
+from utils import my_waterfall, og_waterfall
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -49,7 +49,12 @@ class Interpretability:
         self.lime_explainer = None
         self.model= self.model_check(_model)
         self._compute_shap_values()
-        self.num_cls= self.shap_values.shape[2]
+        print(self.shap_values.shape)
+        try:
+            self.num_cls= self.shap_values.shape[2]
+        except:
+            np.expand_dims(self.shap_values, axis=2)
+            self.num_cls= 2
 
     @property
     def get_shape_vals(self):
@@ -114,29 +119,31 @@ class Interpretability:
 
         self.logger.info(f"Shap Value for TreeExplainer is \n{self.shap_values}")
         self.logger.info(f"Shap Value for Explainer is \n{self.shap_values_explainer.values}")
-        # return shap_values, shap_values_explainer, wrong_shap_values, self.all_feature_names, self.original_cols
 
         shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
 
         num_classes = self.shap_values.shape[2]
 
-        if summary_type == 'Aggregate':
-            shap_values_df= self.aggregate_features(shap_values_df, num_classes)
-            # return shap_values_df
-            shap_values= self.plot_preprocessing(shap_values_df, agg= True, num_cls= num_classes)
-        else:
-            shap_values= self.plot_preprocessing(shap_values_df, num_cls= num_classes)
-        
-        tmp = {
-            f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
-            for class_idx in range(num_classes)
-        }
-        
-        importance_df = pd.DataFrame(tmp)
-        importance_df['Aggregate']= importance_df.sum(axis= 1)
-        # feature_names should set the index
-        importance_df.index = self.original_cols
+        agg_shap_values_df= self.aggregate_features(shap_values_df, num_classes)
+        df_class_dict= self.agg_dataframes(shap_values_df, num_classes)
+        df_class_dict["Aggregate"]= agg_shap_values_df
+        # return df_class_dict
+        importance_df= self.plot_preprocessing(df_class_dict)
+        # return importance_df    
+            
 
+        # tmp = {
+        #     f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
+        #     for class_idx in range(num_classes)
+        # }
+        
+        # importance_df = pd.DataFrame(tmp)
+        # importance_df['Aggregate']= importance_df.sum(axis= 1) # nice idea for aggregation :D
+        # feature_names should set the index'
+        _cols= ["Aggregate"] + [f"class_{i}" for i in range(num_classes)]
+        importance_df.index = self.original_cols
+        importance_df.columns = _cols
+        # return importance_df
         if summary_type == 'Aggregate':
             cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
             fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
@@ -153,7 +160,8 @@ class Interpretability:
             res= {}
             # excluding the Aggregate 
             for i in range(importance_df.shape[1] - 1):
-                cls_imp= importance_df[f'class {i}'].sort_values(ascending= False)[:top_k]
+                cls_imp= importance_df[f'class_{i}'].sort_values(ascending= False)[:top_k]
+                print(cls_imp)
                 fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
                 fig.update_layout(
                     xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
@@ -169,7 +177,7 @@ class Interpretability:
     def contribution_plot(self, idx, sort= 'high-to-low'):
         figs = []
         shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols)
-        shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)
+        shap_values= self.plot_preprocessing(shap_values_df)
 
         for class_index in range(self.num_cls):
             fig = self._contribution_plot(shap_values, self.original_cols, self.base_value, idx, sort, class_index)
@@ -283,82 +291,70 @@ class Interpretability:
         return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
 
     def plot_contribution(self, idx, agg= True):
-        # aggregation and postprocessing have conflict; as waterfall requires Eplainer object
-        # shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
-        # print(getattr(self.shap_values_explainer, "lower_bounds", None))
-        # print(getattr(self.shap_values_explainer, "upper_bounds", None))
-        # shap.waterfall_plot(self.shap_values_explainer[:, :, 0][idx], show= False)
-        # return plt
 
-        # takes the data, slice based on idx and class, then pass it to the
-        # return self.shap_values_explainer
-        shap_values_df, sv_shape, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
+        # return og_waterfall(self.shap_values_explainer[:,:,0][0])
+
+        shap_values_df, _, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
                                                                                                   self.all_feature_names, 
                                                                                                   self.original_cols, 
                                                                                                   self.base_data)
-        
-        sv_shape= sv_shape[1]
+        # return shap_values_base
         if not agg:
             plts= []
+            dict_dfs= self.agg_dataframes(shap_values_df, self.num_cls)
             for i in range(self.num_cls):
-                shap_values_base= shap_values_base[idx][i]
-                shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)[:,:,i][idx]
-            
-                plts.append(my_waterfall(shap_values, sv_shape, shap_values_base, None, shap_values_df, self.original_cols, 
+                print("aaaa")
+                cls_df= dict_dfs[f'class_{i}']
+                proc_shap_values_base= shap_values_base[idx][i]
+                # shap_values= np.array(shap_values_df)[:,:,i][idx]
+                # return self.shap_values[:,:,i]
+                _shap_values= cls_df.reset_index()
+                proc_shap_values= np.array(_shap_values.iloc[idx])
+                base_df= self.base_data.reset_index()
+                proc_base_df= np.array(base_df.iloc[idx])
+                plts.append(my_waterfall(proc_shap_values, proc_shap_values_base, None, proc_base_df, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds))
                 
             
+            print("returning...")
             return plts
         else:
             shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
-            _shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
-            shap_values= self.plot_preprocessing(shap_values_df, num_cls= self.num_cls)[idx]
-            return shap_values_df, _shap_values_df, self.shap_values_explainer, self.all_feature_names, self.original_cols
+            shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
+            shap_values= self.plot_preprocessing(shap_values_df)[idx]
             df_idx= self.base_data.iloc[idx]
-            return my_waterfall(shap_values, sv_shape, shap_values_base, None, df_idx, self.original_cols, 
+            return my_waterfall(shap_values, shap_values_base, None, df_idx, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds)
 
 
         
-    def plot_preprocessing(self, shap_values_df, num_cls= None, agg= False):
+    def plot_preprocessing(self, d_dfs) -> pd.DataFrame:
+        """
+        must be with .abs() or it will show the negative impact between features
+        """
         arrays_by_class = []
 
-        for class_num in range(num_cls):
-            cols_for_class = [col for col in shap_values_df.columns if f'_class_{class_num}' in col]
-            class_df = shap_values_df[cols_for_class]
-            class_array = class_df.to_numpy()
-            arrays_by_class.append(class_array)
+        for _, df in d_dfs.items():
+            df= df.abs().sum(axis= 0)
+            arr= np.array(df)
+            total_sum = np.sum(arr)
+            normalized_arr = arr / total_sum
+            arrays_by_class.append(normalized_arr)
 
-        result_array = np.stack(arrays_by_class, axis=-1)
-        return result_array
+        return pd.DataFrame(arrays_by_class).T
 
-    # def aggregate_class_columns(self, df):
 
-    #     features= df.columns.tolist()
-    #     aggregated_df = pd.DataFrame()
+    def agg_dataframes(self, df, class_nums):
+        dfs_by_class = {}
+        for class_num in range(class_nums):
+            cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
+            dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
 
-    #     for feature in features:
-    #         matching_columns = [col for col in df.columns if col.startswith(f'{feature}_class_')]
-            
-    #         aggregated_df[f'{feature}_aggregated'] = df[matching_columns].sum(axis=1)
-    #     return aggregated_df
-
-    # def agg_dataframes(self, df, class_nums):
-    #     dfs_by_class = {}
-    #     for class_num in range(class_nums):
-    #         cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
-    #         dfs_by_class[f'class_{class_num}'] = df[cols_for_class]
-
-    #     dfs = list(dfs_by_class.values())
-    #     result = pd.DataFrame(index=dfs[0].index, columns=dfs[0].columns)
-    #     for df in dfs:
-    #         result = result.add(df, fill_value=0)
-
-    #     return result
+        return dfs_by_class
 
     def aggregate_features(self, df, num_classes):
         """
-        Aggregate the OHE
+        Aggregate the n-classes
         """
         class_suffixes = tuple(f'_class_{i}' for i in range(num_classes))
         features = set('_'.join(col.split('_')[:-2]) for col in df.columns if col.endswith(class_suffixes)) # that's redundunt using self.original would suffice.
@@ -367,7 +363,7 @@ class Interpretability:
         
         for feature in features:
             cols_to_agg = [col for col in df.columns if col.startswith(feature) and col.endswith(class_suffixes)]
-            df_agg[f'{feature}_agg'] = df[cols_to_agg].sum(axis=1)
+            df_agg[f'{feature}_class_agg'] = df[cols_to_agg].sum(axis=1)
         
         return df_agg
 
