@@ -49,12 +49,10 @@ class Interpretability:
         self.lime_explainer = None
         self.model= self.model_check(_model)
         self._compute_shap_values()
-        print(self.shap_values.shape)
-        try:
+        if len(self.shap_values.shape) > 2:
             self.num_cls= self.shap_values.shape[2]
-        except:
-            np.expand_dims(self.shap_values, axis=2)
-            self.num_cls= 2
+        else:
+            self.num_cls= 1 # set for binray classification and regression
 
     @property
     def get_shape_vals(self):
@@ -303,7 +301,6 @@ class Interpretability:
             plts= []
             dict_dfs= self.agg_dataframes(shap_values_df, self.num_cls)
             for i in range(self.num_cls):
-                print("aaaa")
                 cls_df= dict_dfs[f'class_{i}']
                 proc_shap_values_base= shap_values_base[idx][i]
                 # shap_values= np.array(shap_values_df)[:,:,i][idx]
@@ -316,7 +313,6 @@ class Interpretability:
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds))
                 
             
-            print("returning...")
             return plts
         else:
             shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
