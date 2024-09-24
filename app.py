@@ -168,7 +168,8 @@ if uploaded_file is not None:
         feature_contribution= st.checkbox("Feature Contribution")
         if feature_contribution:
             target_cls= st.selectbox("Select the target class", list(y_train.unique()))
-            target_cls= get_corresponding_labels(target_cls, True)
+            if type(DF[target][0]) == str:
+                target_cls= get_corresponding_labels(target_cls, True)
             if st.button("Generate Random Number"):
                 X_test= X_test.reset_index()
                 _sub_DF= DF.reset_index()

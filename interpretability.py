@@ -37,7 +37,7 @@ class Interpretability:
         self.original_cols= X_train.columns.tolist()
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
-        self.base_data= X_test
+        self.base_data= X_test.reset_index(drop= True)
         self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
         self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
         self.all_feature_names= self.nums + self.cats
@@ -51,8 +51,11 @@ class Interpretability:
         self._compute_shap_values()
         if len(self.shap_values.shape) > 2:
             self.num_cls= self.shap_values.shape[2]
+            self.dim3= True
         else:
             self.num_cls= 1 # set for binray classification and regression
+            self.dim3= False
+
 
     @property
     def get_shape_vals(self):
@@ -118,12 +121,11 @@ class Interpretability:
         self.logger.info(f"Shap Value for TreeExplainer is \n{self.shap_values}")
         self.logger.info(f"Shap Value for Explainer is \n{self.shap_values_explainer.values}")
 
-        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols)
-
-        num_classes = self.shap_values.shape[2]
-
-        agg_shap_values_df= self.aggregate_features(shap_values_df, num_classes)
-        df_class_dict= self.agg_dataframes(shap_values_df, num_classes)
+        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols, self.dim3)
+        # return shap_values_df
+        agg_shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
+        # return shap_values_df, agg_shap_values_df
+        df_class_dict= self.agg_dataframes(shap_values_df, self.num_cls)
         df_class_dict["Aggregate"]= agg_shap_values_df
         # return df_class_dict
         importance_df= self.plot_preprocessing(df_class_dict)
@@ -132,13 +134,14 @@ class Interpretability:
 
         # tmp = {
         #     f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
-        #     for class_idx in range(num_classes)
+        #     for class_idx in range(self.num_cls)
         # }
         
         # importance_df = pd.DataFrame(tmp)
         # importance_df['Aggregate']= importance_df.sum(axis= 1) # nice idea for aggregation :D
         # feature_names should set the index'
-        _cols= ["Aggregate"] + [f"class_{i}" for i in range(num_classes)]
+        _cols= ["Aggregate"] + [f"class_{i}" for i in range(self.num_cls)]
+        # print(list(set([item.split('_class')[0] for item in self.all_feature_names])))
         importance_df.index = self.original_cols
         importance_df.columns = _cols
         # return importance_df
@@ -159,7 +162,6 @@ class Interpretability:
             # excluding the Aggregate 
             for i in range(importance_df.shape[1] - 1):
                 cls_imp= importance_df[f'class_{i}'].sort_values(ascending= False)[:top_k]
-                print(cls_imp)
                 fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of Class {i}")
                 fig.update_layout(
                     xaxis_range=[0, cls_imp.max() * 1.1], # padding max val
@@ -174,7 +176,7 @@ class Interpretability:
             return res
     def contribution_plot(self, idx, sort= 'high-to-low'):
         figs = []
-        shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols)
+        shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols, self.dim3)
         shap_values= self.plot_preprocessing(shap_values_df)
 
         for class_index in range(self.num_cls):
@@ -250,7 +252,7 @@ class Interpretability:
         
         return fig
     
-    def process_explainer_values(self, explainer_values, feature_names, original_feature_names, base_data):
+    def process_explainer_values(self, explainer_values, feature_names, original_feature_names, base_data, dim3= True):
         # https://github.com/shap/shap/issues/1252
         # For a classifier that gives us the shap values it's recommended to check the positive class,  not the negatives
         sv_shape= explainer_values.shape 
@@ -268,22 +270,35 @@ class Interpretability:
         for name in original_feature_names:
             if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
                 idx = np.where(feature_names == name)[0][0]
-                aggregated_shap[f'{name}_shape_values'] = values[:, idx, :]
+                if dim3:
+                    aggregated_shap[f'{name}_shape_values'] = values[:, idx, :]
+                else:
+                    aggregated_shap[f'{name}_shape_values'] = values[:, idx]
+
                 if shap_values_display_data is not None:
                     raise NotImplementedError("can't be used")
 
             else:  # categorical feature
                 encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
                 # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
-                aggregated_shap[f'{name}_shape_values'] = np.sum([values[:, np.where(feature_names == f)[0][0], :] 
-                                                for f in encoded_features], axis=0)
+                if dim3:
+                    aggregated_shap[f'{name}_shape_values'] = np.sum([values[:, np.where(feature_names == f)[0][0], :] 
+                                                        for f in encoded_features], axis=0)
+                else:
+                    aggregated_shap[f'{name}_shape_values'] = np.sum([values[:, np.where(feature_names == f)[0][0]] 
+                                                        for f in encoded_features], axis=0)
 
                 if shap_values_display_data is not None:
                     raise NotImplementedError("can't be used")
                     
-        data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
-        agg_df= pd.concat(data_flattened.values(), axis=1)
-        agg_df= agg_df.set_index(base_data.index)
+        if dim3:
+            data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
+            agg_df = pd.concat(data_flattened.values(), axis=1)
+        else:
+            agg_df = pd.DataFrame(aggregated_shap)
+            agg_df.columns = [f'{col}_class_0' for col in agg_df.columns]
+        index= base_data.index
+        agg_df= agg_df.set_index(index)
         _df= pd.concat([agg_df, base_data], axis=1)
         assert len(_df) == len(self.base_data), "Miss dimension between the shap and base data."
         return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
@@ -295,26 +310,34 @@ class Interpretability:
         shap_values_df, _, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
                                                                                                   self.all_feature_names, 
                                                                                                   self.original_cols, 
-                                                                                                  self.base_data)
-        # return shap_values_base
+                                                                                                  self.base_data,
+                                                                                                  self.dim3)
+        # return shap_values_df, self.base_data
+        
         if not agg:
             plts= []
             dict_dfs= self.agg_dataframes(shap_values_df, self.num_cls)
             for i in range(self.num_cls):
                 cls_df= dict_dfs[f'class_{i}']
-                proc_shap_values_base= shap_values_base[idx][i]
+                if self.dim3:
+                    proc_shap_values_base= shap_values_base[idx][i]
+                else:
+                    proc_shap_values_base= shap_values_base[idx]
                 # shap_values= np.array(shap_values_df)[:,:,i][idx]
                 # return self.shap_values[:,:,i]
-                _shap_values= cls_df.reset_index()
+                _shap_values= cls_df#.reset_index()
                 proc_shap_values= np.array(_shap_values.iloc[idx])
-                base_df= self.base_data.reset_index()
-                proc_base_df= np.array(base_df.iloc[idx])
+                base_df= self.base_data#.reset_index()
+                proc_base_df= np.array(base_df.iloc[idx])[1:]
+
                 plts.append(my_waterfall(proc_shap_values, proc_shap_values_base, None, proc_base_df, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds))
+                # return proc_base_df, self.original_cols
                 
             
             return plts
         else:
+            # TODO
             shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
             shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
             shap_values= self.plot_preprocessing(shap_values_df)[idx]
@@ -363,22 +386,30 @@ class Interpretability:
         
         return df_agg
 
-    def process_ohe(self, shap_values, feature_names, original_feature_names):
-
+    def process_ohe(self, shap_values, feature_names, original_feature_names, dim3= True):
         aggregated_shap = {}
         feature_names= np.array(feature_names)
         for name in original_feature_names:
             if name in feature_names:  # numerical feature or non OHE feature (dont know if any exist ¯\_(ツ)_/¯)
                 idx = np.where(feature_names == name)[0][0]
-                aggregated_shap[name] = shap_values[:, idx, :]
+                aggregated_shap[name] = shap_values[:, idx, :] if dim3 else shap_values[:, idx]
             else:  # categorical feature
                 encoded_features = [f for f in feature_names if f.startswith(f"{name}_")]
-                # aggregation is done over the same class, as the shap value is always "a function of the number of outputs"
-                aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0], :] 
-                                                for f in encoded_features], axis=0)
+                # aggregation is done over the same class, as the shap value is always "a function of the number of outputs" in case of dim3
+                if dim3:
+                    aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0], :] 
+                                                    for f in encoded_features], axis=0)
+                else:
+                    aggregated_shap[name] = np.sum([shap_values[:, np.where(feature_names == f)[0][0]] 
+                                                    for f in encoded_features], axis=0)
 
-        data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
-        return pd.concat(data_flattened.values(), axis=1)
+        if dim3:
+            data_flattened = {key: pd.DataFrame(value, columns=[f'{key}_class_{i}' for i in range(value.shape[1])]) for key, value in aggregated_shap.items()}
+            return pd.concat(data_flattened.values(), axis=1)
+        else:
+            df= pd.DataFrame(aggregated_shap)
+            df.columns = [f'{col}_class_0' for col in df.columns]
+            return df
 
     def explain_with_lime(self, num_features=5, num_samples=1000):
         self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(

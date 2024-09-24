@@ -307,16 +307,18 @@ def my_waterfall(values,
         if feature_names is None:
             feature_names = list(features.index)
         features = features.values
+    print(feature_names[0], features[0])
 
     # fallback feature names
     if feature_names is None:
         feature_names = np.array([labels['FEATURE'] % str(i) for i in range(len(values))])
 
     # init variables we use for tracking the plot locations
-    num_features = min(max_display, int(len(values)))
+    num_features = int(len(values))
     row_height = 0.5
     rng = range(num_features - 1, -1, -1)
     order = np.argsort(-np.abs(values))
+
     pos_lefts = []
     pos_inds = []
     pos_widths = []
@@ -331,7 +333,7 @@ def my_waterfall(values,
     yticklabels = ["" for _ in range(num_features + 1)]
 
     # size the plot based on how many features we are plotting
-    plt.gcf().set_size_inches(8, num_features * row_height + 1.5)
+    plt.gcf().set_size_inches(12, num_features * row_height + 4)
 
     # see how many individual (vs. grouped at the end) features we are plotting
     if num_features == len(values):
@@ -367,9 +369,11 @@ def my_waterfall(values,
                 yticklabels[rng[i]] = format_value(float(features[order[i]]), "%0.03f") + " = " + feature_names[order[i]]
             else:
                 yticklabels[rng[i]] = str(features[order[i]]) + " = " + str(feature_names[order[i]])
+                # print("ticks", yticklabels[rng[i]])
 
     # add a last grouped feature to represent the impact of all the features we didn't show
     if num_features < len(values):
+        print("here?")
         yticklabels[0] = "%d other features" % (len(values) - num_features + 1)
         remaining_impact = base_values - loc
         if remaining_impact < 0:
@@ -547,6 +551,7 @@ def my_waterfall(values,
     
 
 def og_waterfall(shap_values, max_display=10, show=True):
+    return
     """Plots an explanation of a single prediction as a waterfall plot.
 
     The SHAP value of a feature represents the impact of the evidence provided by that feature on the model's
@@ -617,7 +622,7 @@ def og_waterfall(shap_values, max_display=10, show=True):
         feature_names = np.array([labels['FEATURE'] % str(i) for i in range(len(values))])
 
     # init variables we use for tracking the plot locations
-    num_features = min(max_display, len(values))
+    num_features = len(values)
     row_height = 0.5
     rng = range(num_features - 1, -1, -1)
     order = np.argsort(-np.abs(values))
