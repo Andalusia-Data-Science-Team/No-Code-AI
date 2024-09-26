@@ -155,6 +155,7 @@ if uploaded_file is not None:
 
         # 2. Individual Prediction
         feature_contribution= st.checkbox("Feature Contribution")
+        classes= None
         if feature_contribution:
             target_cls= st.selectbox("Select the target class", list(y_train.unique()))
             if type(DF[target][0]) == str:
@@ -170,7 +171,10 @@ if uploaded_file is not None:
                     proba_preds= inference(_dataframe, True)
                     st.write("Model Probability Prediciton")
                     st.write(proba_preds)
-                    fig = go.Figure(data=[go.Pie(values=proba_preds[0], labels=list(classes.keys()))])
+                    if classes:
+                        fig = go.Figure(data=[go.Pie(values=proba_preds[0], labels=list(classes.keys()))])
+                    else:
+                        fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
                     st.plotly_chart(fig)
                 figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 'agg': False})
                 for fig in figs[0]:
