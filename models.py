@@ -153,10 +153,18 @@ class Model:
         ])
 
     def reverse_label(self, y):
-        return self.label_encoder.inverse_transform(y)
+        classes = self.label_encoder.classes_
+        encoded_values = self.label_encoder.transform(classes)
+        d = {cls: enc for cls, enc in zip(classes, encoded_values)}
+
+        return d, self.label_encoder.inverse_transform(y)
 
     def encode_label(self, y):
-        return self.label_encoder.transform(y)
+        classes = self.label_encoder.classes_
+        encoded_values = self.label_encoder.transform(classes)
+        d = {cls: enc for cls, enc in zip(classes, encoded_values)}
+
+        return d, self.label_encoder.transform(y)
 
     def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)

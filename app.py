@@ -135,7 +135,10 @@ if uploaded_file is not None:
         if shap_summary:
             depth= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
             summary_type= st.selectbox("Summary Type", ["Aggregate", "Detailed"])
-            f= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_shap_summary= {"summary_type": summary_type, "top_k": depth})
+            shap_summary_normalized= st.checkbox('Do Not Normalize Shap Summary')
+            f= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_shap_summary= {"summary_type": summary_type, 
+                                                                                    "top_k": depth,
+                                                                                    "normalize": not shap_summary_normalized})
 
             if isinstance(f, list):
                 for _p in f:
@@ -148,53 +151,30 @@ if uploaded_file is not None:
                         st.plotly_chart(_p)
             else:
                 st.plotly_chart(f)
-        # Uncomment
-        # shap_dependency= st.checkbox('Shap Dependence')
-        # if shap_dependency:
-        #     shap_feature_1= st.selectbox('Select The Feature', selected_cols)
-        #     shap_feature_color= st.selectbox('Color Feature', selected_cols)
-        #     shap_feature_2= st.selectbox('Select The Second Feature', selected_cols)
-        #     list_shap_2= st.selectbox(shap_feature_2, [i for i in shap_df[shap_feature_2].unique()])
 
 
-
-        # 2. Summary Plot
-        # summary_plot= st.checkbox('Summary Plot')
-        # if summary_plot:
-        #     pass
-        # end_uncomment
-
-        # 3. Individual Prediction
+        # 2. Individual Prediction
         feature_contribution= st.checkbox("Feature Contribution")
         if feature_contribution:
             target_cls= st.selectbox("Select the target class", list(y_train.unique()))
             if type(DF[target][0]) == str:
-                target_cls= get_corresponding_labels(target_cls, True)
+                classes, target_cls= get_corresponding_labels(target_cls, True)
+                st.write(classes)
             if st.button("Generate Random Number"):
                 X_test= X_test.reset_index()
                 _sub_DF= DF.reset_index()
                 random_number = random.randint(1, len(X_test))
                 _dataframe= X_test.iloc[[random_number]]
                 st.write(_dataframe)
-                proba_preds= inference(_dataframe, True)
-                st.write("Model Probability Prediciton")
-                st.write(proba_preds)
-                fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
-                st.plotly_chart(fig)
+                if task_type == "Classification": 
+                    proba_preds= inference(_dataframe, True)
+                    st.write("Model Probability Prediciton")
+                    st.write(proba_preds)
+                    fig = go.Figure(data=[go.Pie(values=proba_preds[0], labels=list(classes.keys()))])
+                    st.plotly_chart(fig)
                 figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 'agg': False})
                 for fig in figs[0]:
                     st.pyplot(fig)
-            # comment
-            # target_feature= st.selectbox('Select The Feature to See its Contribution', selected_cols)
-            # list_attr= st.selectbox(target_feature, [i for i in shap_df[target_feature].unique()])
-            # pdp_feature= st.selectbox('Select the Partial Dependence Feature', selected_cols)
-            # sorting= st.selectbox("Sorting", ["Absolute", "High to Low", "Low to High", "Importance"])
-            # summary_type= st.selectbox("The Depth", [i+1 for i in range(len(selected_cols))])
-            # end uncomment
-            
-            # contribution plot
-            # partial dependence plot
-            # contribution table
 
         st.subheader('What If / Inference')
         # st.header('Inference')
@@ -203,12 +183,6 @@ if uploaded_file is not None:
             user_input= utils.inf_proc(user_input)
             inf_df[column] = [user_input]
   
-        # p= shap_lime(cfg, X_train, X_test, y_train, y_test, shap_feature= shap_feature)
-        # if isinstance(p, list):
-        #     for _p in p:
-        #         st.pyplot(_p)
-        # else:
-        #     st.pyplot(p)
 
         st.write(inf_df)
         if st.button('Submit'):

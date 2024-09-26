@@ -38,10 +38,22 @@ class Interpretability:
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
         self.base_data= X_test.reset_index(drop= True)
-        self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
-        self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
-        self.all_feature_names= self.nums + self.cats
-        self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
+        try:
+            self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
+        except:
+            self.cats= []
+        try:
+            self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
+        except:
+            self.nums= []
+
+        self.all_feature_names= self.nums + self.cats # all feature names would change the order?
+
+        try:
+            self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
+        except:
+            self.ohe_feature_names= []
+            
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
@@ -114,37 +126,22 @@ class Interpretability:
         df_normalized = df_abs.div(col_sums, axis=1)
         return df_normalized
     
-    def plot_shap_summary(self, summary_type= 'Aggregate', top_k= 10):
-        # if classification:
+    def plot_shap_summary(self, summary_type= 'Aggregate', top_k= 10, normalize= True):
         assert summary_type in ('Aggregate', 'Detailed'), f'the summary type {summary_type} is not supported!'
-
         self.logger.info(f"Shap Value for TreeExplainer is \n{self.shap_values}")
         self.logger.info(f"Shap Value for Explainer is \n{self.shap_values_explainer.values}")
 
         shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols, self.dim3)
-        # return shap_values_df
         agg_shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
-        # return shap_values_df, agg_shap_values_df
         df_class_dict= self.agg_dataframes(shap_values_df, self.num_cls)
         df_class_dict["Aggregate"]= agg_shap_values_df
-        # return df_class_dict
-        importance_df= self.plot_preprocessing(df_class_dict)
-        # return importance_df    
+        importance_df= self.plot_preprocessing(df_class_dict, normalize)
             
-
-        # tmp = {
-        #     f'class {class_idx}': np.mean(np.abs(shap_values[:, :, class_idx]), axis=0)
-        #     for class_idx in range(self.num_cls)
-        # }
-        
-        # importance_df = pd.DataFrame(tmp)
-        # importance_df['Aggregate']= importance_df.sum(axis= 1) # nice idea for aggregation :D
         # feature_names should set the index'
         _cols= ["Aggregate"] + [f"class_{i}" for i in range(self.num_cls)]
-        # print(list(set([item.split('_class')[0] for item in self.all_feature_names])))
         importance_df.index = self.original_cols
         importance_df.columns = _cols
-        # return importance_df
+        
         if summary_type == 'Aggregate':
             cls_imp= importance_df['Aggregate'].sort_values(ascending= False)[:top_k]
             fig = px.bar(cls_imp, x=cls_imp.values, y=cls_imp.index, orientation='h', title= f"Feature Importance of the Aggregated Classes")
@@ -303,7 +300,7 @@ class Interpretability:
         assert len(_df) == len(self.base_data), "Miss dimension between the shap and base data."
         return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
 
-    def plot_contribution(self, idx, agg= True):
+    def plot_contribution(self, idx, agg= True, normalize= True):
 
         # return og_waterfall(self.shap_values_explainer[:,:,0][0])
 
@@ -332,7 +329,6 @@ class Interpretability:
 
                 plts.append(my_waterfall(proc_shap_values, proc_shap_values_base, None, proc_base_df, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds))
-                # return proc_base_df, self.original_cols
                 
             
             return plts
@@ -340,14 +336,14 @@ class Interpretability:
             # TODO
             shap_values_base= np.sum(shap_values_base[idx])/len(shap_values_base[idx])
             shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
-            shap_values= self.plot_preprocessing(shap_values_df)[idx]
+            shap_values= self.plot_preprocessing(shap_values_df, normalize)[idx]
             df_idx= self.base_data.iloc[idx]
             return my_waterfall(shap_values, shap_values_base, None, df_idx, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds)
 
 
         
-    def plot_preprocessing(self, d_dfs) -> pd.DataFrame:
+    def plot_preprocessing(self, d_dfs, normalized= True) -> pd.DataFrame:
         """
         must be with .abs() or it will show the negative impact between features
         """
@@ -356,9 +352,12 @@ class Interpretability:
         for _, df in d_dfs.items():
             df= df.abs().sum(axis= 0)
             arr= np.array(df)
-            total_sum = np.sum(arr)
-            normalized_arr = arr / total_sum
-            arrays_by_class.append(normalized_arr)
+            if normalized:
+                total_sum = np.sum(arr)
+                normalized_arr = arr / total_sum
+                arrays_by_class.append(normalized_arr)
+            else:
+                arrays_by_class.append(arr)
 
         return pd.DataFrame(arrays_by_class).T
 
@@ -410,21 +409,6 @@ class Interpretability:
             df= pd.DataFrame(aggregated_shap)
             df.columns = [f'{col}_class_0' for col in df.columns]
             return df
-
-    def explain_with_lime(self, num_features=5, num_samples=1000):
-        self.lime_explainer = lime.lime_tabular.LimeTabularExplainer(
-            self.X_train.values, 
-            feature_names=self.X_train.columns, 
-            class_names=np.unique(self.y_train) if self.model_type == 'classification' else None,
-            discretize_continuous=True
-        )
-        i = np.random.randint(0, self.X_test.shape[0])
-        exp = self.lime_explainer.explain_instance(self.X_test.iloc[i].values, 
-                                                   self.model.predict_proba if self.model_type == 'classification' else self.model.predict, 
-                                                   num_features=num_features, 
-                                                   num_samples=num_samples)
-        exp.show_in_notebook(show_table=True)
-        return exp
     
     def model_check(self, model):
         if hasattr(model, 'best_estimator_'):
