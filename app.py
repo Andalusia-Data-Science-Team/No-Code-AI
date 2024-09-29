@@ -180,6 +180,8 @@ if uploaded_file is not None:
                 for fig in figs[0]:
                     st.pyplot(fig)
 
+                # table
+
         st.subheader('What If / Inference')
         # st.header('Inference')
         for column in selected_cols:

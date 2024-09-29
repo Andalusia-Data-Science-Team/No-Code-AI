@@ -309,7 +309,6 @@ class Interpretability:
                                                                                                   self.original_cols, 
                                                                                                   self.base_data,
                                                                                                   self.dim3)
-        # return shap_values_df, self.base_data
         
         if not agg:
             plts= []
@@ -363,6 +362,16 @@ class Interpretability:
 
 
     def agg_dataframes(self, df, class_nums):
+        """
+        Aggregates columns of a dataframe based on class number identifiers and 
+        groups them into separate dataframes.
+
+        This method takes a dataframe `df` and an integer `class_nums`, which 
+        specifies the number of classes. It creates a dictionary where the keys 
+        are class labels in the format `'class_{class_num}'` and the values are 
+        dataframes containing columns from `df` that match the pattern 
+        `'_class_{class_num}'` in their column names.
+        """
         dfs_by_class = {}
         for class_num in range(class_nums):
             cols_for_class = [col for col in df.columns if f'_class_{class_num}' in col]
