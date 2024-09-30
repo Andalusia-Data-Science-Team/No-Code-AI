@@ -7,4 +7,5 @@ test.py
 *_.ipynb
 *.bat
 *.csv
+*.xlsx
 *.log

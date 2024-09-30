@@ -26,7 +26,7 @@ matplotlib.use('Agg')
 # np.set_printoptions(precision=7, suppress=False)
 
 class Interpretability:
-    def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None, apply_prior= False):
+    def __init__(self, model, model_type, X_train, X_test, y_train=None, y_test=None, apply_prior= True):
 
         logging.basicConfig(filename='Xplain.log', level=logging.INFO, format='%(asctime)s - %(message)s')
         self.logger = logging.getLogger(__name__)
