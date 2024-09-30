@@ -292,6 +292,7 @@ def my_waterfall(values,
     # print("base: ", type(base_values))
     # print("base: ", base_values)
     features = shap_values_display_data if shap_values_display_data is not None else shap_values_data
+    print("og Feature: ", features)
     # feature_names = shap_values.feature_names
     # values = shap_values.values
     # print("features: ", type(features))
@@ -365,6 +366,8 @@ def my_waterfall(values,
         if features is None:
             yticklabels[rng[i]] = feature_names[order[i]]
         else:
+            print("features: ", features)
+            print("order: ", order)
             if np.issubdtype(type(features[order[i]]), np.number):
                 yticklabels[rng[i]] = format_value(float(features[order[i]]), "%0.03f") + " = " + feature_names[order[i]]
             else:

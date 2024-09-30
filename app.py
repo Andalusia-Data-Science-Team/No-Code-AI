@@ -183,7 +183,6 @@ if uploaded_file is not None:
                 # table
 
         st.subheader('What If / Inference')
-        # st.header('Inference')
         for column in selected_cols:
             user_input = st.text_input(column)
             user_input= utils.inf_proc(user_input)
@@ -192,8 +191,20 @@ if uploaded_file is not None:
 
         st.write(inf_df)
         if st.button('Submit'):
-            preds= inference(inf_df)
-            st.write(preds)
+            if task_type == "Classification":
+                preds= inference(inf_df, True)
+                if classes:
+                    fig = go.Figure(data=[go.Pie(values=preds[0], labels=list(classes.keys()))])
+                else:
+                    fig = go.Figure(data=[go.Pie(values=preds[0])])
+                st.plotly_chart(fig)
+            figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'data': inf_df, 'agg': False})
+            for fig in figs[0]:
+                st.pyplot(fig)
+            else:
+                # regression
+                preds= inference(inf_df)
+                st.write(preds)
             
 
         if st.button('Download Model'):

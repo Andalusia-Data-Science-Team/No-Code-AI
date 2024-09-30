@@ -294,22 +294,33 @@ class Interpretability:
         else:
             agg_df = pd.DataFrame(aggregated_shap)
             agg_df.columns = [f'{col}_class_0' for col in agg_df.columns]
+        print("agg_df shape: ", agg_df.shape)
         index= base_data.index
         agg_df= agg_df.set_index(index)
         _df= pd.concat([agg_df, base_data], axis=1)
-        assert len(_df) == len(self.base_data), "Miss dimension between the shap and base data."
+        assert len(_df) == len(base_data), f"Miss dimension between the shap: {len(_df)} and base data: {len(base_data)}."
         return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
 
-    def plot_contribution(self, idx, agg= True, normalize= True):
+    def plot_contribution(self, data= None, idx= 0, agg= True, normalize= True):
 
         # return og_waterfall(self.shap_values_explainer[:,:,0][0])
-
-        shap_values_df, _, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
-                                                                                                  self.all_feature_names, 
-                                                                                                  self.original_cols, 
-                                                                                                  self.base_data,
-                                                                                                  self.dim3)
-        
+        if data is None:
+            shap_values_df, _, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(self.shap_values_explainer, 
+                                                                                                    self.all_feature_names, 
+                                                                                                    self.original_cols, 
+                                                                                                    self.base_data,
+                                                                                                    self.dim3)
+        else:
+            inf_data= self.processor.transform(data)
+            explainer = shap.Explainer(self.model)
+            shap_values_explainer = explainer(inf_data)
+            data= data.reset_index(drop= True)
+            shap_values_df, _, shap_values_base, lower_bounds, upper_bounds= self.process_explainer_values(shap_values_explainer, 
+                                                                                                    self.all_feature_names, 
+                                                                                                    self.original_cols, 
+                                                                                                    data,
+                                                                                                    self.dim3)
+                   
         if not agg:
             plts= []
             dict_dfs= self.agg_dataframes(shap_values_df, self.num_cls)
@@ -324,7 +335,10 @@ class Interpretability:
                 _shap_values= cls_df#.reset_index()
                 proc_shap_values= np.array(_shap_values.iloc[idx])
                 base_df= self.base_data#.reset_index()
-                proc_base_df= np.array(base_df.iloc[idx])[1:]
+                if data is not None:
+                    proc_base_df= np.array(base_df.iloc[idx])
+                else:
+                    proc_base_df= np.array(base_df.iloc[idx])[1:]
 
                 plts.append(my_waterfall(proc_shap_values, proc_shap_values_base, None, proc_base_df, self.original_cols, 
                                 lower_bounds= lower_bounds, upper_bounds= upper_bounds))
