@@ -128,6 +128,13 @@ if uploaded_file is not None:
             sns.heatmap(plot_data, mask = mask, annot=True, center=0, fmt='.2f', linewidths=2)
             st.pyplot(fig)
 
+            skew_plots= utils.plot_numeric_features(_DF)
+            for skew_plot in skew_plots:
+                st.pyplot(skew_plot)
+            
+            pca= utils.PCA_visualization(_DF)
+            st.pyplot(pca)
+
 
             # Display a scatter plot
             st.subheader('Correlation')

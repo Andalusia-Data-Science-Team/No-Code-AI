@@ -1,10 +1,11 @@
-import pandas as pd, numpy as np
+import pandas as pd, numpy as np, seaborn as sns
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 import re
 from shap.plots import colors
 import matplotlib
+from sklearn.decomposition import PCA
 
 from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -114,6 +115,78 @@ def handle(_df, trg, cls= 'Classification'):
 
     return X_train, X_test, y_train, y_test
 
+def plot_numeric_features(df):
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    valid_cols = [col for col in numeric_cols if df[col].nunique() >= 10]
+    
+    plots = []
+    for col in valid_cols:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.kdeplot(data=df[col], ax=ax)
+        
+        skewness = stats.skew(df[col].dropna())
+        _, p_value = stats.normaltest(df[col].dropna())
+        
+        ax.set_title(f'{col} Distribution\nSkewness: {skewness:.2f}, Normality Test p-value: {p_value:.4f}')
+        ax.set_xlabel(col)
+        ax.set_ylabel('Density')
+        
+        plots.append(fig)
+    
+    excluded_cols = set(numeric_cols) - set(valid_cols)
+    if excluded_cols:
+        print(f"Excluded columns (less than 10 unique values): {', '.join(excluded_cols)}")
+    
+    return plots
+
+def PCA_visualization(df):
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    valid_cols = [col for col in numeric_cols if df[col].nunique() >= 10]
+    df= df[valid_cols]
+
+    # Apply PCA
+    pca = PCA().fit(df)
+
+    # Calculate the Cumulative Sum of the Explained Variance
+    explained_variance_ratio = pca.explained_variance_ratio_
+    cumulative_explained_variance = np.cumsum(explained_variance_ratio)
+
+    # Set seaborn plot style
+    sns.set(rc={'axes.facecolor': '#fcf0dc'}, style='darkgrid')
+
+    # Plot the cumulative explained variance against the number of components
+    plt.figure(figsize=(20, 10))
+
+    # Bar chart for the explained variance of each component
+    barplot = sns.barplot(x=list(range(1, len(cumulative_explained_variance) + 1)),
+                        y=explained_variance_ratio)
+
+    # Line plot for the cumulative explained variance
+    lineplot, = plt.plot(range(0, len(cumulative_explained_variance)), cumulative_explained_variance,
+                        marker='o', linestyle='--')
+
+    # Set labels and title
+    plt.xlabel('Number of Components', fontsize=14)
+    plt.ylabel('Explained Variance', fontsize=14)
+    plt.title('Cumulative Variance vs. Number of Components', fontsize=18)
+
+    # Customize ticks and legend
+    plt.xticks(range(0, len(cumulative_explained_variance)))
+    plt.legend(handles=[barplot.patches[0], lineplot],
+            labels=['Explained Variance of Each Component', 'Cumulative Explained Variance'],
+            loc=(0.62, 0.1),
+            frameon=True)  
+
+    # Display the variance values for both graphs on the plots
+    x_offset = -0.3
+    y_offset = 0.01
+    for i, (ev_ratio, cum_ev_ratio) in enumerate(zip(explained_variance_ratio, cumulative_explained_variance)):
+        plt.text(i, ev_ratio, f"{ev_ratio:.2f}", ha="center", va="bottom", fontsize=10)
+        if i > 0:
+            plt.text(i + x_offset, cum_ev_ratio + y_offset, f"{cum_ev_ratio:.2f}", ha="center", va="bottom", fontsize=10)
+
+    plt.grid(axis='both')   
+    return plt
 
 def HeatMap(_df):
     return _df.select_dtypes('number').corr()
