@@ -21,10 +21,8 @@ if uploaded_file is not None:
 
     if file_extension.lower() == 'csv':
         df = pd.read_csv(uploaded_file)
-        st.write(df)
     elif file_extension.lower() in ['xls', 'xlsx']:
         df = pd.read_excel(uploaded_file)
-        st.write(df)
     elif file_extension.lower() == 'pkl':
         try:
             _model = pickle.load(uploaded_file)
@@ -34,6 +32,19 @@ if uploaded_file is not None:
     else:
         st.error('Please upload a CSV, Excel or Pickle file.')
 
+    st.subheader('DataFrame')
+    st.write(df)
+    num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage= utils.descriptive_analysis(df)
+    st.subheader('Numerical Description')
+    st.write(num_des_analysis)
+    st.subheader('Categorical Description')
+    st.write(cat_des_analysis)
+    st.subheader('DataFrame Types')
+    st.write(d_types)
+    st.subheader('Missing per Column %')
+    st.write(missing_percentage)
+    st.subheader('Duplicates %')
+    st.write(dups_percentage)
 
     if 'df' in locals():
         cfg= {'save': True} # for inference stability it's fixed
@@ -73,6 +84,7 @@ if uploaded_file is not None:
         else:
             raise ValueError("Invalid Selection")
         
+
         def process_data(_df, all= False):
             DF= utils.missing(_df, cfg['clean'])
             DF= utils.remove_outliers(DF, cfg['outlier'])
@@ -103,12 +115,19 @@ if uploaded_file is not None:
                 st.write(report[1])
 
         if st.button('Plot Graphs'):
+            st.subheader('Outlier-Inlier Percentage')
+            outlier_plt_df= utils.missing(DF, cfg['clean'])
+            outlier_plt= utils.outlier_inlier_plot(outlier_plt_df)
+            st.pyplot(outlier_plt)
             _DF= process_data(DF, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
             plot_data= utils.HeatMap(_DF)
-            sns.heatmap(plot_data,ax = ax,cmap ="YlGnBu", linewidths = 0.1)
+            mask = np.zeros_like(plot_data)
+            mask[np.triu_indices_from(mask, k=1)] = True
+            sns.heatmap(plot_data, mask = mask, annot=True, center=0, fmt='.2f', linewidths=2)
             st.pyplot(fig)
+
 
             # Display a scatter plot
             st.subheader('Correlation')
@@ -161,7 +180,7 @@ if uploaded_file is not None:
             if type(DF[target][0]) == str:
                 classes, target_cls= get_corresponding_labels(target_cls, True)
                 st.write(classes)
-            if st.button("Generate Random Number"):
+            if st.button("Generate Random Index"):
                 X_test= X_test.reset_index()
                 _sub_DF= DF.reset_index()
                 random_number = random.randint(1, len(X_test))

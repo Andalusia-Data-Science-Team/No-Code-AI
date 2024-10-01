@@ -142,6 +142,43 @@ def inf_proc(item):
         return item
 
 
+def descriptive_analysis(df):
+    num_des_analysis= df.describe().T
+    cat_des_analysis= df.describe(include= 'object').T
+    d_types= pd.DataFrame(df.dtypes, columns= ['type'])
+    missing_percentage= pd.DataFrame((df.isna().sum() / len(df)) * 100, columns=['missing %']).round(2)
+    dups_percentage= (len(df[df.duplicated()]) / len(df)) *100
+
+    return num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage
+
+def outlier_inlier_plot(df):
+    model = IsolationForest(contamination=0.05, random_state=0)
+    numeric_cols = df.select_dtypes(include=np.number).columns
+    binary_cols = [col for col in numeric_cols if df[col].nunique() == 2]
+    numeric_cols = [col for col in numeric_cols if col not in binary_cols]
+
+    num_df= df[numeric_cols]
+    num_df['Outlier_Scores'] = model.fit_predict(num_df.iloc[:, 1:].to_numpy())
+
+    num_df['Is_Outlier'] = [1 if x == -1 else 0 for x in num_df['Outlier_Scores']]
+
+    outlier_percentage = num_df['Is_Outlier'].value_counts(normalize=True) * 100
+
+    plt.figure(figsize=(12, 4))
+    outlier_percentage.plot(kind='barh')
+
+    for index, value in enumerate(outlier_percentage):
+        plt.text(value, index, f'{value:.2f}%', fontsize=15)
+
+    plt.title('Percentage of Inliers and Outliers')
+    plt.xticks(ticks=np.arange(0, 115, 5))
+    plt.xlabel('Percentage (%)')
+    plt.ylabel('Is Outlier')
+    plt.gca().invert_yaxis()
+    
+    return plt
+
+
 class SkewnessTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(self, skew_limit=0.8, forced_fix= False):
