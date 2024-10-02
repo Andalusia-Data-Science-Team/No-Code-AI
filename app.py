@@ -210,8 +210,11 @@ if uploaded_file is not None:
 
         st.subheader('What If / Inference')
         for column in selected_cols:
-            user_input = st.text_input(column)
-            user_input= utils.inf_proc(user_input)
+            if d_types.loc[column].values == 'object':
+                user_input= st.selectbox(f"{column}", [i for i in DF[column].unique()])
+            else:
+                user_input = st.text_input(column)
+                user_input= utils.inf_proc(user_input)
             inf_df[column] = [user_input]
   
 
