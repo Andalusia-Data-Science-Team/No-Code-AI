@@ -304,7 +304,6 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
             else:
                 method_dict[method].append(feature_idx)
 
-        print(method_dict)
         return method_dict
 
     def recommend_skewness_reduction_method(self, feature: pd.Series, forced_fix= False) -> str:
@@ -367,7 +366,7 @@ def my_waterfall(values,
               shap_values_display_data, 
               shap_values_data,
               feature_names, 
-              max_display=10, 
+              max_display=-1, 
               show=False,
               lower_bounds= None,
               upper_bounds= None):
@@ -399,33 +398,26 @@ def my_waterfall(values,
     #     raise ValueError(emsg)
 
     base_values = float(shap_values_base)
-    # print("base: ", type(base_values))
-    # print("base: ", base_values)
+
     features = shap_values_display_data if shap_values_display_data is not None else shap_values_data
-    print("og Feature: ", features)
     # feature_names = shap_values.feature_names
     # values = shap_values.values
-    # print("features: ", type(features))
-    # print("features: ", features.shape)
-    # print("features: ", len(features))
-
-    # print("values: ", type(values))
-    # print("values: ", values.shape)
-    # print("values: ", len(values))
 
     # unwrap pandas series
     if isinstance(features, pd.Series):
         if feature_names is None:
             feature_names = list(features.index)
         features = features.values
-    print(feature_names[0], features[0])
 
     # fallback feature names
     if feature_names is None:
         feature_names = np.array([labels['FEATURE'] % str(i) for i in range(len(values))])
 
     # init variables we use for tracking the plot locations
-    num_features = int(len(values))
+    if max_display == -1 or max_display >= int(len(values)):
+        num_features = int(len(values))    
+    else:
+        num_features= max_display
     row_height = 0.5
     rng = range(num_features - 1, -1, -1)
     order = np.argsort(-np.abs(values))
@@ -476,17 +468,14 @@ def my_waterfall(values,
         if features is None:
             yticklabels[rng[i]] = feature_names[order[i]]
         else:
-            print("features: ", features)
-            print("order: ", order)
+
             if np.issubdtype(type(features[order[i]]), np.number):
                 yticklabels[rng[i]] = format_value(float(features[order[i]]), "%0.03f") + " = " + feature_names[order[i]]
             else:
                 yticklabels[rng[i]] = str(features[order[i]]) + " = " + str(feature_names[order[i]])
-                # print("ticks", yticklabels[rng[i]])
 
     # add a last grouped feature to represent the impact of all the features we didn't show
     if num_features < len(values):
-        print("here?")
         yticklabels[0] = "%d other features" % (len(values) - num_features + 1)
         remaining_impact = base_values - loc
         if remaining_impact < 0:
@@ -664,7 +653,7 @@ def my_waterfall(values,
     
 
 def og_waterfall(shap_values, max_display=10, show=True):
-    return
+    # return
     """Plots an explanation of a single prediction as a waterfall plot.
 
     The SHAP value of a feature represents the impact of the evidence provided by that feature on the model's
@@ -710,19 +699,13 @@ def og_waterfall(shap_values, max_display=10, show=True):
         raise ValueError(emsg)
 
     base_values = float(shap_values.base_values)
-    # print("base: ", base_values)
-    # print("base: ", type(base_values))
+
     features = shap_values.display_data if shap_values.display_data is not None else shap_values.data
-    # print("features: ", type(features))
-    # print("features: ", features.shape)
-    # print("features: ", len(features))
+
     feature_names = shap_values.feature_names
     lower_bounds = getattr(shap_values, "lower_bounds", None)
     upper_bounds = getattr(shap_values, "upper_bounds", None)
     values = shap_values.values
-    # print("values: ", type(values))
-    # print("values: ", values.shape)
-    # print("values: ", len(values))
 
     # unwrap pandas series
     if isinstance(features, pd.Series):

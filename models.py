@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 from utils import SkewnessTransformer
 from model_utils import grid_dict
 
@@ -37,6 +39,29 @@ models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': Lin
               'DecisionTree_cls': DecisionTreeClassifier()}
 
 normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
+
+
+class BaseModel(ABC):
+    def __init__(self, algorithm, grid=False):
+        self.pipeline = None
+
+    @abstractmethod
+    def build_pipeline(self, X, poly_feat=False, skew_fix=False):
+        """This method must be implemented by subclasses and should set self.pipeline."""
+        pass
+
+    def ensure_pipeline_built(self):
+        """Ensure the pipeline has been built by checking if self.pipeline is set."""
+        if self.pipeline is None:
+            raise ValueError("The pipeline has not been built. Ensure `build_pipeline` sets self.pipeline.")
+
+    def fit(self, X, y):
+        self.ensure_pipeline_built()
+        self.pipeline.fit(X, y)
+
+    def predict(self, X):
+        self.ensure_pipeline_built()
+        return self.pipeline.predict(X)
 
 
 class KFoldModel(BaseEstimator, TransformerMixin):
@@ -79,14 +104,11 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
         self.best_estimator_ = None
 
     def fit(self, X, y=None):
-        print(self.grid_params)
         self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.grid_params, cv=3)
         self.grid_search.fit(X, y)
         print('grid search applied')
 
         self.best_estimator_ = self.grid_search.best_estimator_
-        print(self.best_estimator_, type(self.best_estimator_))
-
         return self
     
     def transform(self, X):

@@ -10,6 +10,7 @@ from interpretability import shap_lime
 import plotly.graph_objects as go
 matplotlib.use('Agg')
 
+st.info("Click Browse Files")
 uploaded_file = st.file_uploader("Upload Data/Model")
 SEED = int(st.number_input('Enter a Seed', value=42))
 st.write(f'Using {SEED} as a seed')
@@ -48,11 +49,11 @@ if uploaded_file is not None:
 
     if 'df' in locals():
         cfg= {'save': True} # for inference stability it's fixed
-        DF= df.copy()
-        cols= DF.columns
+        back_DF= df.copy()
+        cols= back_DF.columns
         target = st.selectbox('Select The Target', cols)
         selected_options = st.multiselect('Select columns to be removed', cols)
-        DF= DF.drop(selected_options, axis= 1)
+        DF= back_DF.drop(selected_options, axis= 1)
 
         value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
         task_type = st.radio("Select Task Type", ["Regression", "Classification"], index=0, help="Select the task type")
@@ -86,12 +87,12 @@ if uploaded_file is not None:
         
 
         def process_data(_df, all= False):
-            DF= utils.missing(_df, cfg['clean'])
-            DF= utils.remove_outliers(DF, cfg['outlier'])
+            _DF= utils.missing(_df, cfg['clean'])
+            _DF= utils.remove_outliers(_DF, cfg['outlier'])
             if all:
-                return DF
+                return _DF
 
-            X_train, X_test, y_train, y_test= utils.handle(DF, target, task_type)
+            X_train, X_test, y_train, y_test= utils.handle(_DF, target, task_type)
             return X_train, X_test, y_train, y_test
         
         if st.button('Apply'):
@@ -116,29 +117,29 @@ if uploaded_file is not None:
 
         if st.button('Plot Graphs'):
             st.subheader('Outlier-Inlier Percentage')
-            outlier_plt_df= utils.missing(DF, cfg['clean'])
+            outlier_plt_df= utils.missing(back_DF, cfg['clean'])
             outlier_plt= utils.outlier_inlier_plot(outlier_plt_df)
             st.pyplot(outlier_plt)
-            _DF= process_data(DF, all= True)
+            heatMap_DF= process_data(back_DF, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
-            plot_data= utils.HeatMap(_DF)
+            plot_data= utils.HeatMap(heatMap_DF)
             mask = np.zeros_like(plot_data)
             mask[np.triu_indices_from(mask, k=1)] = True
             sns.heatmap(plot_data, mask = mask, annot=True, center=0, fmt='.2f', linewidths=2)
             st.pyplot(fig)
 
-            skew_plots= utils.plot_numeric_features(_DF)
+            skew_plots= utils.plot_numeric_features(back_DF)
             for skew_plot in skew_plots:
                 st.pyplot(skew_plot)
             
-            pca= utils.PCA_visualization(_DF)
+            pca= utils.PCA_visualization(back_DF)
             st.pyplot(pca)
 
 
             # Display a scatter plot
             st.subheader('Correlation')
-            corr_values= utils.corr_plot(_DF)
+            corr_values= utils.corr_plot(back_DF)
             st.write(corr_values.sort_values(by= 'abs_correlation', ascending= False))
             fig, ax = plt.subplots()
             ax = corr_values.abs_correlation.hist(bins=50, figsize=(12, 8))
@@ -202,7 +203,10 @@ if uploaded_file is not None:
                     else:
                         fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
                     st.plotly_chart(fig)
-                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 'agg': False})
+                max_display= st.text_input('Please Enter the max display: ')
+                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 
+                                                                                           'agg': False,
+                                                                                           'max_display': 8})
                 for fig in figs[0]:
                     st.pyplot(fig)
 
@@ -227,7 +231,9 @@ if uploaded_file is not None:
                 else:
                     fig = go.Figure(data=[go.Pie(values=preds[0])])
                 st.plotly_chart(fig)
-            figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'data': inf_df, 'agg': False})
+            figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'data': inf_df, 
+                                                                                       'agg': False,
+                                                                                       'max_display': 8})
             for fig in figs[0]:
                 st.pyplot(fig)
             else:

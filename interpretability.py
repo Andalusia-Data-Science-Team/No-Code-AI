@@ -1,6 +1,6 @@
 import shap
 
-import lime
+from deprecated import deprecated
 import lime.lime_tabular
 import pandas as pd, numpy as np
 from utils import my_waterfall, og_waterfall
@@ -38,27 +38,19 @@ class Interpretability:
         self.X_train = self.processor.transform(X_train)
         self.X_test = self.processor.transform(X_test)
         self.base_data= X_test.reset_index(drop= True)
-        try:
-            self.cats= self.processor.named_transformers_['categorical'].get_feature_names_out().tolist()
-        except:
-            self.cats= []
-        try:
-            self.nums= self.processor.named_transformers_['numerical'].get_feature_names_out().tolist()
-        except:
-            self.nums= []
 
-        self.all_feature_names= self.nums + self.cats # all feature names would change the order?
+        # despite the order of model train the processor.get_feature_names_out() will always save the order.
+        self.all_feature_names= [i.split('__')[-1] for i in self.processor.get_feature_names_out()]
 
-        try:
-            self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
-        except:
-            self.ohe_feature_names= []
+        # try:
+        #     self.ohe_feature_names= self.processor.named_transformers_['categorical']['one_hot_encoder'].get_feature_names_out()
+        # except:
+        #     self.ohe_feature_names= []
             
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
         self.shap_values = None
-        self.lime_explainer = None
         self.model= self.model_check(_model)
         self._compute_shap_values()
         if len(self.shap_values.shape) > 2:
@@ -82,8 +74,7 @@ class Interpretability:
         if isinstance(self.model, (RandomForestClassifier, GradientBoostingClassifier, DecisionTreeClassifier,
                                    ExtraTreesClassifier, XGBClassifier, XGBRegressor)):
             if self.apply_prior:
-                # First check if you can fully replace explainer
-                self.explainer = shap.TreeExplainer(self.model, self.X_train.toarray(), feature_names= self.all_feature_names)
+                self.explainer = shap.TreeExplainer(self.model, self.X_train, feature_names= self.all_feature_names)
             else:
                 self.explainer = shap.TreeExplainer(self.model, feature_names= self.all_feature_names)
 
@@ -98,9 +89,9 @@ class Interpretability:
             # Default to KernelExplainer for any unsupported models
             self.explainer = shap.KernelExplainer(self.model.predict, self.X_train)
 
-
+        # let it be like that for now to test .toarray() with the prior
         if self.apply_prior:
-            self.shap_values = self.explainer.shap_values(self.X_test.toarray())
+            self.shap_values = self.explainer.shap_values(self.X_test)
         else:
             self.shap_values = self.explainer.shap_values(self.X_test)
 
@@ -110,11 +101,10 @@ class Interpretability:
         self.base_value= self.explainer.expected_value
             # Changed in version 0.45.0: Return type for models with multiple outputs changed from list to np.ndarray.
         if isinstance(self.shap_values, list):
+            assert len(self.shap_values) == len(self.shap_values_explainer) == 1, "length of shap must be 1"
             self.shap_values= self.shap_values[0]
             self.shap_values_explainer= self.shap_values_explainer[0]
-        else:
-            self.shap_values = self.shap_values
-            self.shap_values_explainer = self.shap_values_explainer
+
 
     def plot_variable_importance(self):
         shap.summary_plot(self.shap_values, self.X_test, feature_names= self.all_feature_names)
@@ -131,8 +121,10 @@ class Interpretability:
         self.logger.info(f"Shap Value for TreeExplainer is \n{self.shap_values}")
         self.logger.info(f"Shap Value for Explainer is \n{self.shap_values_explainer.values}")
 
-        shap_values_df= self.process_ohe(self.shap_values_explainer.values, self.all_feature_names, self.original_cols, self.dim3)
+        shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols, self.dim3)
+        self.logger.info(f"shap_values_df is \n{shap_values_df}")
         agg_shap_values_df= self.aggregate_features(shap_values_df, self.num_cls)
+        self.logger.info(f"agg_shap_values_df is \n{agg_shap_values_df}")
         df_class_dict= self.agg_dataframes(shap_values_df, self.num_cls)
         df_class_dict["Aggregate"]= agg_shap_values_df
         importance_df= self.plot_preprocessing(df_class_dict, normalize)
@@ -171,6 +163,7 @@ class Interpretability:
                 res[f'result_{i}']= fig
             
             return res
+    @deprecated(reason="Use plot_contribution() instead.")
     def contribution_plot(self, idx, sort= 'high-to-low'):
         figs = []
         shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols, self.dim3)
@@ -182,6 +175,7 @@ class Interpretability:
 
         return figs
 
+    @deprecated(reason="Use plot_contribution() instead.")
     def _contribution_plot(self, shap_values, feature_names, base_value, instance_index, sort_order='high-to-low', class_index=1):
 
         # Handle multi-dimensional SHAP values
@@ -256,7 +250,7 @@ class Interpretability:
         shap_values_base= explainer_values.base_values   
         shap_values_display_data= explainer_values.display_data  
                                                             
-        values= explainer_values.values  
+        values= explainer_values.values #self.shap_values 
         lower_bounds = getattr(explainer_values, "lower_bounds", None)   
                                                                     
                                                                     
@@ -294,14 +288,13 @@ class Interpretability:
         else:
             agg_df = pd.DataFrame(aggregated_shap)
             agg_df.columns = [f'{col}_class_0' for col in agg_df.columns]
-        print("agg_df shape: ", agg_df.shape)
         index= base_data.index
         agg_df= agg_df.set_index(index)
         _df= pd.concat([agg_df, base_data], axis=1)
         assert len(_df) == len(base_data), f"Miss dimension between the shap: {len(_df)} and base data: {len(base_data)}."
         return agg_df, sv_shape, shap_values_base, lower_bounds, upper_bounds
 
-    def plot_contribution(self, data= None, idx= 0, agg= True, normalize= True):
+    def plot_contribution(self, data= None, idx= 0, agg= True, normalize= True, max_display= -1):
 
         # return og_waterfall(self.shap_values_explainer[:,:,0][0])
         if data is None:
@@ -341,7 +334,7 @@ class Interpretability:
                     proc_base_df= np.array(base_df.iloc[idx])[1:]
 
                 plts.append(my_waterfall(proc_shap_values, proc_shap_values_base, None, proc_base_df, self.original_cols, 
-                                lower_bounds= lower_bounds, upper_bounds= upper_bounds))
+                                lower_bounds= lower_bounds, upper_bounds= upper_bounds, max_display= max_display))
                 
             
             return plts
@@ -352,7 +345,7 @@ class Interpretability:
             shap_values= self.plot_preprocessing(shap_values_df, normalize)[idx]
             df_idx= self.base_data.iloc[idx]
             return my_waterfall(shap_values, shap_values_base, None, df_idx, self.original_cols, 
-                                lower_bounds= lower_bounds, upper_bounds= upper_bounds)
+                                lower_bounds= lower_bounds, upper_bounds= upper_bounds, max_display= max_display)
 
 
         
@@ -439,7 +432,7 @@ class Interpretability:
         else:
             return model
 
-def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, apply_prior= False, **kwargs):
+def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, apply_prior= True, **kwargs):
     plts = []
     
     if m is None:
