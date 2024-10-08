@@ -203,7 +203,6 @@ if uploaded_file is not None:
                     else:
                         fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
                     st.plotly_chart(fig)
-                max_display= st.text_input('Please Enter the max display: ')
                 figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 
                                                                                            'agg': False,
                                                                                            'max_display': 8})
