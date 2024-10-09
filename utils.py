@@ -221,8 +221,9 @@ def descriptive_analysis(df):
     d_types= pd.DataFrame(df.dtypes, columns= ['type'])
     missing_percentage= pd.DataFrame((df.isna().sum() / len(df)) * 100, columns=['missing %']).round(2)
     dups_percentage= (len(df[df.duplicated()]) / len(df)) *100
+    unq_percentage= unique_percentage(df)
 
-    return num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage
+    return num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage, unq_percentage
 
 def outlier_inlier_plot(df):
     model = IsolationForest(contamination=0.05, random_state=0)
@@ -360,6 +361,17 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
                 return max(all, key=lambda y: abs(all[y]))
             else:
                 return 'No Fix'
+
+import pandas as pd
+
+import pandas as pd
+
+def unique_percentage(df):
+    return pd.DataFrame({
+        'Column': df.columns,
+        'Unique_Percentage': [(df[col].nunique() / len(df[col])) * 100 for col in df.columns]
+    }).sort_values(by='Unique_Percentage', ascending=False).reset_index(drop=True)
+
 
 def my_waterfall(values, 
               shap_values_base, 

@@ -35,7 +35,7 @@ if uploaded_file is not None:
 
     st.subheader('DataFrame')
     st.write(df)
-    num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage= utils.descriptive_analysis(df)
+    num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage, u_cols= utils.descriptive_analysis(df)
     st.subheader('Numerical Description')
     st.write(num_des_analysis)
     st.subheader('Categorical Description')
@@ -44,8 +44,11 @@ if uploaded_file is not None:
     st.write(d_types)
     st.subheader('Missing per Column %')
     st.write(missing_percentage)
-    st.subheader('Duplicates %')
-    st.write(dups_percentage)
+    st.subheader(f'Duplicates {round(dups_percentage * 100, 2)} %')
+    # st.write(dups_percentage)
+    st.subheader('Unique %')
+    st.write(u_cols)
+    
 
     if 'df' in locals():
         cfg= {'save': True} # for inference stability it's fixed
