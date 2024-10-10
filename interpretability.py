@@ -437,7 +437,7 @@ def shap_lime(cfg, X_train, X_test, y_train=None, y_test=None, m=None, apply_pri
     
     if m is None:
         try:
-            with open('model.pkl', 'rb') as f:
+            with open(cfg['model'], 'rb') as f:
                 m = pickle.load(f)
         except FileNotFoundError:
             print("Model file not found.")

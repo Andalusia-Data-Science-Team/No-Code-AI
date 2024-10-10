@@ -252,6 +252,13 @@ def outlier_inlier_plot(df):
     
     return plt
 
+def convert_numeric(df):
+    for column in df.columns:
+        try:
+            df[column] = pd.to_numeric(df[column])
+        except:
+            pass
+    return df
 
 class SkewnessTransformer(BaseEstimator, TransformerMixin):
 
