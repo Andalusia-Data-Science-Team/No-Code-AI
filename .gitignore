@@ -5,7 +5,7 @@ wandb/
 *.pkl
 *.parquet
 test.py
-*_.ipynb
+*.ipynb
 *.bat
 *.csv
 *.xlsx

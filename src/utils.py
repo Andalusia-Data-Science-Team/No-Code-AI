@@ -260,6 +260,16 @@ def convert_numeric(df):
             pass
     return df
 
+
+def process_data(_df, cfg, target, task_type, all= False):
+    _DF= missing(_df, cfg['clean'])
+    _DF= remove_outliers(_DF, cfg['outlier'])
+    if all:
+        return _DF
+
+    X_train, X_test, y_train, y_test= handle(_DF, target, task_type)
+    return X_train, X_test, y_train, y_test
+
 class SkewnessTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(self, skew_limit=0.8, forced_fix= False):

@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd, numpy as np, random
-import utils
-from models import model, inference, get_corresponding_labels
+import src.utils as utils
+from src.models import model, inference, get_corresponding_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import matplotlib
-from interpretability import shap_lime
 import plotly.graph_objects as go
 matplotlib.use('Agg')
 
@@ -86,22 +85,14 @@ if uploaded_file is not None:
 
 
         else:
+            # time series
             raise ValueError("Invalid Selection")
         
-
-        def process_data(_df, all= False):
-            _DF= utils.missing(_df, cfg['clean'])
-            _DF= utils.remove_outliers(_DF, cfg['outlier'])
-            if all:
-                return _DF
-
-            X_train, X_test, y_train, y_test= utils.handle(_DF, target, task_type)
-            return X_train, X_test, y_train, y_test
         
         if st.button('Apply'):
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
-                X_train, X_test, y_train, y_test= process_data(DF)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("Accuracy:")
                 st.write(report[0])
@@ -111,7 +102,7 @@ if uploaded_file is not None:
             
             if task_type == "Regression":
                 st.write('Perform Regression task with option:')
-                X_train, X_test, y_train, y_test= process_data(DF)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("MSE:")
                 st.write(report[0])
@@ -123,7 +114,7 @@ if uploaded_file is not None:
             outlier_plt_df= utils.missing(back_DF, cfg['clean'])
             outlier_plt= utils.outlier_inlier_plot(outlier_plt_df)
             st.pyplot(outlier_plt)
-            heatMap_DF= process_data(back_DF, all= True)
+            heatMap_DF= utils.process_data(back_DF, cfg, target, task_type, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
             plot_data= utils.HeatMap(heatMap_DF)
@@ -157,40 +148,15 @@ if uploaded_file is not None:
         shap_df= DF[selected_cols]
 
         st.header("Xplain")
-        X_train, X_test, y_train, y_test= process_data(DF)
+        X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
 
-        # 1. Feature Dependence
-        st.subheader("Feature Dependence")
-        shap_summary= st.checkbox('Shap Summary')
-        if shap_summary:
-            depth= st.selectbox("Depth", [i+1 for i in range(len(selected_cols))])
-            summary_type= st.selectbox("Summary Type", ["Aggregate", "Detailed"])
-            shap_summary_normalized= st.checkbox('Do Not Normalize Shap Summary')
-            f= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_shap_summary= {"summary_type": summary_type, 
-                                                                                    "top_k": depth,
-                                                                                    "normalize": not shap_summary_normalized})
-
-            if isinstance(f, list):
-                for _p in f:
-                    c= 0
-                    if isinstance(_p, dict):
-                        for _, val in _p.items():
-                            st.plotly_chart(_p[f'result_{c}'])
-                            c+=1
-                    else:
-                        st.plotly_chart(_p)
-            else:
-                st.plotly_chart(f)
-
-
-        # 2. Individual Prediction
         feature_contribution= st.checkbox("Feature Contribution")
         classes= None
         if feature_contribution:
             target_cls= st.selectbox("Select the target class", list(y_train.unique()))
             if type(DF[target][0]) == str:
                 classes, target_cls= get_corresponding_labels(target_cls, True)
-                st.write(classes)
+                # st.write(classes)
             if st.button("Generate Random Index"):
                 X_test= X_test.reset_index()
                 _sub_DF= DF.reset_index()
@@ -206,13 +172,6 @@ if uploaded_file is not None:
                     else:
                         fig = go.Figure(data=[go.Pie(values=proba_preds[0])])
                     st.plotly_chart(fig)
-                figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'idx': random_number, 
-                                                                                           'agg': False,
-                                                                                           'max_display': 8})
-                for fig in figs[0]:
-                    st.pyplot(fig)
-
-                # table
 
         st.subheader('What If / Inference')
         for column in selected_cols:
@@ -233,11 +192,7 @@ if uploaded_file is not None:
                 else:
                     fig = go.Figure(data=[go.Pie(values=preds[0])])
                 st.plotly_chart(fig)
-            figs= shap_lime(cfg, X_train, X_test, y_train, y_test, plot_contribution= {'data': inf_df, 
-                                                                                       'agg': False,
-                                                                                       'max_display': 8})
-            for fig in figs[0]:
-                st.pyplot(fig)
+
             else:
                 # regression
                 preds= inference(inf_df)

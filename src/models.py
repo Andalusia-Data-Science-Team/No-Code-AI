@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from utils import SkewnessTransformer
-from model_utils import grid_dict
+from src.utils import SkewnessTransformer
+from src.model_utils import grid_dict
 
 import pickle
 import pandas as pd, numpy as np

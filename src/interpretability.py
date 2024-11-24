@@ -1,9 +1,7 @@
 import shap
 
-from deprecated import deprecated
-import lime.lime_tabular
 import pandas as pd, numpy as np
-from utils import my_waterfall, og_waterfall
+from src.utils import my_waterfall, og_waterfall
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -163,86 +161,7 @@ class Interpretability:
                 res[f'result_{i}']= fig
             
             return res
-    @deprecated(reason="Use plot_contribution() instead.")
-    def contribution_plot(self, idx, sort= 'high-to-low'):
-        figs = []
-        shap_values_df= self.process_ohe(self.shap_values, self.all_feature_names, self.original_cols, self.dim3)
-        shap_values= self.plot_preprocessing(shap_values_df)
 
-        for class_index in range(self.num_cls):
-            fig = self._contribution_plot(shap_values, self.original_cols, self.base_value, idx, sort, class_index)
-            figs.append(fig)
-
-        return figs
-
-    @deprecated(reason="Use plot_contribution() instead.")
-    def _contribution_plot(self, shap_values, feature_names, base_value, instance_index, sort_order='high-to-low', class_index=1):
-
-        # Handle multi-dimensional SHAP values
-        instance_shap = shap_values[class_index][instance_index]
-        mean_shap = np.mean(shap_values[class_index], axis=0)
-        if isinstance(base_value, np.ndarray):
-            base_value = base_value[class_index]
-        
-        # Calculate the difference between instance and mean SHAP values
-        diff_shap = instance_shap - mean_shap
-        
-        # Sort the features based on the specified order
-        if sort_order == 'high-to-low':
-            sorted_idx = np.argsort(diff_shap)[::-1]
-        elif sort_order == 'low-to-high':
-            sorted_idx = np.argsort(diff_shap)
-        else:  # 'absolute'
-            sorted_idx = np.argsort(np.abs(diff_shap))[::-1]
-        
-        sorted_features = [feature_names[i] for i in sorted_idx]
-        sorted_values = diff_shap[sorted_idx]
-        
-        # Calculate final prediction value
-        final_value = base_value + np.sum(instance_shap)
-        mean_prediction = base_value + np.sum(mean_shap)
-        
-        # Create a DataFrame for the waterfall chart
-        df = pd.DataFrame({
-            'Feature': sorted_features + ['Final Prediction'],
-            'Value': np.concatenate([sorted_values, [final_value - mean_prediction]]),
-            'Text': [f'{v:.4f}' for v in sorted_values] + [f'{final_value - mean_prediction:.4f}']
-        })
-        
-        df['Measure'] = ['relative'] * len(sorted_features) + ['total']
-        
-        # Create the waterfall chart
-        fig = go.Figure(go.Waterfall(
-            name="Contribution", orientation="v",
-            measure=df['Measure'],
-            x=df['Feature'],
-            textposition="outside",
-            text=df['Text'],
-            y=df['Value'],
-            connector={"line":{"color":"rgb(63, 63, 63)"}},
-            decreasing={"marker":{"color":"#FF0000"}},
-            increasing={"marker":{"color":"#00FF00"}},
-            totals={"marker":{"color":"#0000FF"}},
-        ))
-        
-        # Update layout
-        fig.update_layout(
-            title=f"SHAP value differences for instance {instance_index}, class {class_index} vs. dataset mean<br>(Final prediction: {final_value:.4f}, Mean prediction: {mean_prediction:.4f})",
-            showlegend=False,
-            xaxis_title="",
-            yaxis_title="SHAP value difference",
-            xaxis={'categoryorder':'total ascending'},
-            waterfallgap=0.2,
-        )
-        
-        # Add a base line at zero (representing the mean prediction)
-        fig.add_shape(type="line",
-            x0=-0.5, y0=0, x1=len(sorted_features)-0.5, y1=0,
-            line=dict(color="red", width=2, dash="dot")
-        )
-        
-        return fig
-    
     def process_explainer_values(self, explainer_values, feature_names, original_feature_names, base_data, dim3= True):
         # https://github.com/shap/shap/issues/1252
         # For a classifier that gives us the shap values it's recommended to check the positive class,  not the negatives
