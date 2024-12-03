@@ -193,10 +193,8 @@ class Model:
         if y.dtypes == 'object':
             y = self.label_encoder.fit_transform(y)
 
-
         self.pipeline.fit(X, y)
         self.model = self.pipeline.named_steps['model']
-
 
     def preprocess(self, X):
         return self.pipeline.named_steps['preprocessor'].transform(X)
@@ -231,7 +229,6 @@ class Model:
         with open(file_path, 'wb') as f:
             pickle.dump(self, f)
         print(f"Model saved successfully as: {file_path}")
-
 
 
 def model(X_train, X_test, y_train, y_test, cfg):

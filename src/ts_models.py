@@ -24,7 +24,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
                  prophet_params= None, 
                  selected_cols= None, 
                  freq= '1min', 
-                 f_period= 5):
+                 f_period= 5,
+                 test_size= 0.05):
         
         self.date_col= date_col
         self.target_col= target_col
@@ -32,6 +33,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.selected_cols= selected_cols
         self.freq= freq
         self.f_period= f_period
+        self.test_size= 1- test_size
 
     def fit(self, X, y= None):
         
@@ -44,8 +46,11 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
         feature_df= self.create_features(df, self.selected_cols)
-        feature_df.set_index('ds', inplace= True)
-        df_mod= self.feature_eng(feature_df[['ds', 'y']])
+        train_size= int(len(feature_df) *self.test_size)
+        self.train_df, self.test_df= feature_df[:train_size], feature_df[train_size +1:]
+
+        # feature_df.set_index('ds', inplace= True)
+        df_mod= self.feature_eng(self.train_df[['ds', 'y']])
 
         self.m= Prophet(**self.prophet_params)
         feat_ls= [i for i in df_mod.columns if i not in ['ds', 'y']]
@@ -58,14 +63,14 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         future= self.m.make_future_dataframe(periods= self.f_period, freq= self.freq)
         self.future_preds= self.feature_eng(future)
 
+        return self
 
     def transform(self, X= None):
         self.forcast= self.m.predict(self.future_preds)
-        return self.forcast
+        self._rms()
+        return self
 
     def create_features(self, df: pd.DataFrame, selected_columns):
-        print("all: ", df.columns.tolist())
-        selected_columns= selected_columns or df.columns.tolist()
         df_selected = df.rename(
             columns={
                 self.date_col: 'ds', 
@@ -78,7 +83,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         prophet_df['close_diff']= prophet_df.shift(1)['y']
         prophet_df['close_change'] = prophet_df['y'] - prophet_df['close_diff']
         prophet_df['close_change'].fillna(0, inplace=True)
-        print("prophet_df: ", prophet_df.columns)
+
         rows= []
         for _, row in tqdm(prophet_df.iterrows(), total= prophet_df.shape[0]):
             row_data= dict(
@@ -93,10 +98,11 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
             rows.append(row_data)
         _df= pd.DataFrame(rows)
+        selected_columns= selected_columns or prophet_df.columns.tolist()
 
         selected_columns= [sel_col for sel_col in selected_columns if sel_col not in ["ds", "close_change", "y"]]
-        print("selected_columns: ", selected_columns)
-        print("prophet_df_columns: ", prophet_df.columns.tolist())
+
+        selected_columns= selected_columns
         prophet_df= prophet_df[selected_columns]
 
         return pd.concat([prophet_df, _df], axis= 1)
@@ -128,20 +134,20 @@ class ProphetModel(BaseEstimator, TransformerMixin):
                 )
             )
 
-        return fig
+        return fig.show()
 
     def fit_transform(self, X, y=None):
-        return self.fit(X, y).transform()
+        return self.fit(X, y).transform(X)
     
 
     def plot_forcast(self):
         return self.m.plot(self.forcast)
     
     def plot_component(self):
-        return self.plot_components(self.forcast)
+        return self.m.plot_components(self.forcast)
     
-    def _rms(self, test,):
-        target= test[:self.f_period][self.target_col]
+    def _rms(self):
+        target= self.test_df[:self.f_period]['y']
         pred= self.forcast["yhat"][-self.f_period:]
 
-        return mse(target, pred, squared= False)
+        print(mse(target, pred, squared= False))
