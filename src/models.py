@@ -28,8 +28,12 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 
+from .ts_models import ProphetModel
+
 import matplotlib
 matplotlib.use('Agg')
+# prophet_kw= {'date_col': None,
+#              'target_col': None}
 
 models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
               'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
@@ -224,6 +228,7 @@ class Model:
         r2 = r2_score(y_true, y_pred)
 
         return mse, r2
+    
 
     def save_model(self, file_path):
         with open(file_path, 'wb') as f:
@@ -231,7 +236,15 @@ class Model:
         print(f"Model saved successfully as: {file_path}")
 
 
-def model(X_train, X_test, y_train, y_test, cfg):
+def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
+    # global prophet_kw
+    if cfg['task_type'] == 'Time':
+        prophet_kw= cfg['ts_config']
+        print("Setting Prophet args")
+        pf= ProphetModel(**prophet_kw)
+        pf.fit_transform(X_train)
+        return pf
+
     _model= Model(cfg['alg'], cfg['apply_GridSearch'])
     _model.train(X_train, y_train, cfg['skew_fix'], cfg['poly_feat'])
     if cfg['save']:

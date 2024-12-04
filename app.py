@@ -58,7 +58,7 @@ if uploaded_file is not None:
         DF= back_DF.drop(selected_options, axis= 1)
 
         value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
-        task_type = st.radio("Select Task Type", ["Regression", "Classification"], index=0, help="Select the task type")
+        task_type = st.radio("Select Task Type", ["Regression", "Classification", "Time"], index=0, help="Select the task type")
 
         if task_type == "Classification":
             st.write("Classification task selected")
@@ -82,6 +82,26 @@ if uploaded_file is not None:
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
+
+        elif task_type == "Time":
+            st.write("Time Series is selected")
+            ts_kw= {}
+            cfg['task_type']= task_type
+            cfg['clean'] = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
+            cfg['outlier'] = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
+            cfg['alg'] = st.selectbox("Select The Model", ["Prophet", "LSTM"])
+            if cfg['alg'] == 'Prophet':
+                ts_kw['date_col']= st.selectbox('Select The Date Column', DF.columns)
+                ts_kw['target_col']= target
+                ts_kw['prophet_params']= {}
+                ts_kw['selected_cols']= {}
+                ts_kw['freq']= '1min'
+                ts_kw['f_period']= 5
+                cfg['ts_config']= ts_kw
+
+            cfg['skew_fix']= st.checkbox('Skew Fix')
+            cfg['poly_feat']= False
+            cfg['apply_GridSearch']= False
 
 
         else:
@@ -108,6 +128,14 @@ if uploaded_file is not None:
                 st.write(report[0])
                 st.write("R2:")
                 st.write(report[1])
+
+            if task_type == "Time":
+                st.write("Performing Time Series Analysis")
+                ts_df= utils.process_data(DF, cfg, target, task_type, all= True)
+                pf= model(ts_df, cfg= cfg)
+                st.plotly_chart(pf.slide_display())
+                st.pyplot(pf.plot_forcast())
+                st.pyplot(pf.plot_component())
 
         if st.button('Plot Graphs'):
             st.subheader('Outlier-Inlier Percentage')

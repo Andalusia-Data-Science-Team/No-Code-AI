@@ -91,4 +91,3 @@ grid_dict= {'SVC': svc_param_grid, 'LR': lr_param_grid, 'Linear Regression': lre
               'Ridge': ridge_param_grid, 'Lasso': lasso_param_grid, 'extra_tree': xtra_param_grid, 'SVR': svr_param_grid,
               'GradientBoosting_cls': GradientBoosting_param_grid, 'Adaboost': ada_param_grid,
               'DecisionTree_cls': dt_param_grid}
-

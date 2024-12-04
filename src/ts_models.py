@@ -134,7 +134,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
                 )
             )
 
-        return fig.show()
+        return fig#.show()
 
     def fit_transform(self, X, y=None):
         return self.fit(X, y).transform(X)
