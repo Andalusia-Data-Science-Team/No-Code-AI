@@ -1,0 +1,43 @@
+[build-system]
+requires= ["setuptools>=42.0", "wheel"]
+build-backend= "setuptools.build_meta"
+
+[project]
+name = "insight"
+version = "0.0.1"
+description = "A quick streamlit demo with multiple models"
+readme = "README.md"
+authors = [
+    {name = "Amr Elagoz", email = "amrahmedelagoz@gmail.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+]
+keywords = ["machine learning", "python"]
+requires-python = ">=3.8"
+
+
+[tool.pytest.ini_options]
+addopts = "--cov=insight"
+testpaths = [
+    "tests",
+]
+
+[tool.mypy]
+mypy_path = "src"
+check_untyped_defs = true
+disallow_any_generics = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+no_implicit_reexport = true
