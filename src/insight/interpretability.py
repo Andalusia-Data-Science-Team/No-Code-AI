@@ -1,7 +1,7 @@
 import shap
 
 import pandas as pd, numpy as np
-from src.utils import my_waterfall, og_waterfall
+from .utils import my_waterfall, og_waterfall
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
