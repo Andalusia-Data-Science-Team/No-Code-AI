@@ -1,6 +1,6 @@
 import pytest
 import re
-from insight.utils import format_value  # Replace with the actual import
+from insight.utils import format_value 
 
 def test_format_value_with_string():
     assert format_value("123.45000", "%.2f") == "123.45"

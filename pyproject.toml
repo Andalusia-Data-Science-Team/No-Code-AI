@@ -12,14 +12,13 @@ authors = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
 ]
 keywords = ["machine learning", "python"]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 
 
 [tool.pytest.ini_options]

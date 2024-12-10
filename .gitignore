@@ -74,3 +74,6 @@ ipython_config.py
 
 # pyenv
 .python-version
+
+# That action recommends adding this gitignore to prevent accidentally committing keys.
+gha-creds-*.json
