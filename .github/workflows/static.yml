@@ -4,6 +4,14 @@ on:
     - push
     - pull_request
 
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-docs:
     runs-on: ${{ matrix.os }}
