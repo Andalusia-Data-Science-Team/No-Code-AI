@@ -41,3 +41,23 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./docs/build/html
+
+  deploy:
+      environment:
+        name: github-pages
+        url: ${{ steps.deployment.outputs.page_url }}
+      runs-on: ubuntu-latest
+      steps:
+        - name: Download artifact from Docs workflow
+          uses: actions/download-artifact@v4
+          with:
+            name: github-pages
+            path: ./docs/build/html
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+  
+        - name: Setup Pages
+          uses: actions/configure-pages@v5
+  
+        - name: Deploy to GitHub Pages
+          id: deployment
+          uses: actions/deploy-pages@v4
