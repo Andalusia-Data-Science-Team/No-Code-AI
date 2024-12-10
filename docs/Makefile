@@ -2,7 +2,7 @@ SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = Insight
 SOURCEDIR     = meta
 BUILDDIR      = build
-GITHUBPAGESBRANCH = gh-pages
+GITHUBPAGESBRANCH = dev-test
 
 
 .PHONY: help clean html github_deploy

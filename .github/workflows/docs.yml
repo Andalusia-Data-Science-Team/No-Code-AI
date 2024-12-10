@@ -1,9 +1,8 @@
 name: Docs
 
 on:
-  push:
-    branches:
-      - master
+    - push
+    - pull_request
 
 jobs:
   build-docs:
@@ -35,4 +34,4 @@ jobs:
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/_build/html
+        publish_dir: ./docs/build/html
