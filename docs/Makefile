@@ -1,33 +1,20 @@
-SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = Insight
-SOURCEDIR     = meta
-BUILDDIR      = build
-GITHUBPAGESBRANCH = dev-test
+# Minimal makefile for Sphinx documentation
+#
 
+# You can set these variables from the command line, and also
+# from the environment for the first two.
+SPHINXOPTS    ?=
+SPHINXBUILD   ?= sphinx-build
+SOURCEDIR     = .
+BUILDDIR      = _build
 
-.PHONY: help clean html github_deploy
-
+# Put it first so that "make" without argument is like "make help".
 help:
-	@echo "Please use 'make <target>' where <target> is one of"
-	@echo "  html           to make standalone HTML files"
-	@echo "  clean          to clean up build files"
-	@echo "  github_deploy  to build and push HTML docs to GitHub Pages"
+	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-clean:
-	@echo "Cleaning up..."
-	@rm -rf $(BUILDDIR)/*
+.PHONY: help Makefile
 
-html:
-	@echo "Building HTML documentation..."
-	$(SPHINXBUILD) -b html $(SOURCEDIR) $(BUILDDIR)/html
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
-
-github_deploy: html
-	@echo "Deploying to GitHub Pages..."
-	# Navigate to the build HTML directory
-	cd $(BUILDDIR)/html && \
-	# Initialize git (if needed), add, commit, and push changes to gh-pages branch
-	git add . && \
-	git commit -m "Update documentation" && \
-	git push -f origin $(GITHUBPAGESBRANCH)
-	@echo "Documentation deployed to GitHub Pages."
+# Catch-all target: route all unknown targets to Sphinx using the new
+# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
+%: Makefile
+	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)

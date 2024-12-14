@@ -1,12 +1,6 @@
-import numpy as np, pandas as pd, matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib as rc
-from pylab import rcParams
-from pandas.plotting import register_matplotlib_converters
+import pandas as pd
 
-from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error as mse
 
 import plotly.express as px
@@ -14,7 +8,6 @@ import plotly.express as px
 from tqdm import tqdm
 
 from prophet import Prophet
-from prophet.plot import plot_plotly, plot_components_plotly
 
 
 class ProphetModel(BaseEstimator, TransformerMixin):

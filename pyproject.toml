@@ -3,7 +3,7 @@ requires= ["setuptools>=42.0", "wheel"]
 build-backend= "setuptools.build_meta"
 
 [project]
-name = "insight"
+name = "Insight"
 version = "0.0.1"
 description = "A quick streamlit demo with multiple models"
 readme = "README.md"
@@ -17,14 +17,43 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
 ]
-keywords = ["machine learning", "python"]
+keywords = ["machine learning", "python", "AI", "data science"]
 requires-python = ">=3.10"
 
+dependencies = [
+    "pandas==2.2.2",
+    "scikit-learn==1.5.1",
+    "xgboost==2.1.1",
+    "tqdm==4.66.5",
+    "matplotlib==3.9.2",
+    "shap==0.46.0",
+    "numpy==2.0.2",
+    "plotly==5.24.0",
+    "prophet==1.1.6",
+    "seaborn==0.13.2",
+    "scipy==1.14.1"
+]
+
+[project.optional-dependencies]
+testing = [
+    "pytest==8.3.4",
+    "Sphinx==8.1.3",
+    "sphinx-rtd-theme==3.0.2",
+    "sphinx-autodoc-typehints==2.5.0",
+    "pytest-cov==6.0.0",
+    "mypy==1.13.0",
+    "flake8==7.1.1",
+    "tox==4.23.2",
+    "black==24.10.0",
+    "pytest-mock==3.14.0",
+    "pytest-watcher==0.4.3",
+    "autopep8==2.3.1"
+]
 
 [tool.pytest.ini_options]
-addopts = "--cov=insight"
+addopts = "--cov=claims"
 testpaths = [
-    "tests",
+    "test",
 ]
 
 [tool.mypy]

@@ -17,7 +17,6 @@ import pickle
 import logging
 
 import plotly.express as px
-import plotly.graph_objects as go
 
 import matplotlib
 matplotlib.use('Agg')
