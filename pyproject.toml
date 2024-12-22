@@ -50,6 +50,13 @@ testing = [
     "autopep8==2.3.1"
 ]
 
+deployment = [
+    "streamlit",
+    "flask==3.0.0",
+    "gunicorn==21.0.0",
+    "waitress==2.1.2",
+]
+
 [tool.pytest.ini_options]
 addopts = "--cov=claims"
 testpaths = [

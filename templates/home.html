@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container text-center">
+    <h1 class="mb-4" style="color: #AE8C67;">Welcome to Andalusia AI Tool</h1>
+    <p>This tool helps you analyze your data, train machine learning models, and make predictions without technical expertise.</p>
+    <div class="mt-4">
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">Upload Data</a>
+        <a href="{{ url_for('analysis') }}" class="btn btn-secondary">Analyze Data</a>
+        <a href="{{ url_for('train') }}" class="btn btn-success">Train Model</a>
+        <a href="{{ url_for('predict') }}" class="btn btn-info">Make Predictions</a>
+    </div>
+</div>
+{% endblock %}

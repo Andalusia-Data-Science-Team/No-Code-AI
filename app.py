@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd, numpy as np, random
-import src.utils as utils
-from src.models import model, inference, get_corresponding_labels
+import src.insight.utils as utils
+from src.insight.models import model, inference, get_corresponding_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle

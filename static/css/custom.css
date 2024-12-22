@@ -1,0 +1,29 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f9f9f9;
+}
+
+header img {
+    margin: 10px 0;
+}
+
+footer {
+    background-color: #AE8C67 !important;
+    color: #fff !important;
+    text-align: center;
+    padding: 10px 0;
+}
+
+h1 {
+    color: #AE8C67;
+}
+
+.btn-primary {
+    background-color: #AE8C67;
+    border-color: #AE8C67;
+}
+
+.btn-primary:hover {
+    background-color: #8C6B52;
+    border-color: #8C6B52;
+}
