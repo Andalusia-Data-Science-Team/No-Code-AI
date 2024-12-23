@@ -77,3 +77,4 @@ ipython_config.py
 
 # That action recommends adding this gitignore to prevent accidentally committing keys.
 gha-creds-*.json
+/test_data/
