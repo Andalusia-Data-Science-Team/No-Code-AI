@@ -2,6 +2,8 @@ import pandas as pd, numpy as np, seaborn as sns
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
+from sklearn.cluster import KMeans
+
 import re
 from shap.plots import colors
 import matplotlib
@@ -11,6 +13,9 @@ from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
 import matplotlib.pyplot as plt
 
+import matplotlib.gridspec as gridspec
+from sklearn.metrics import silhouette_score
+from yellowbrick.cluster import SilhouetteVisualizer
 
 def list_wrap(x):
     """A helper to patch things since slicer doesn't handle arrays of arrays (it does handle lists of arrays)"""
@@ -104,14 +109,14 @@ def remove_outliers(_df, method= "Don't Remove Outliers"):
     else:
         return _df
     
-def handle(_df, trg, cls= 'Classification'):
+def handle(_df, trg, split_value, cls= 'Classification'):
     X= _df.drop([trg], axis= 1)
     y= _df[trg]
 
     if cls == 'Classification':
-        X_train, X_test, y_train, y_test= train_test_split(X, y, stratify= y)
+        X_train, X_test, y_train, y_test= train_test_split(X, y, test_size= split_value, stratify= y)
     else:
-        X_train, X_test, y_train, y_test= train_test_split(X, y, shuffle= False)
+        X_train, X_test, y_train, y_test= train_test_split(X, y, test_size= split_value, shuffle= False)
 
     return X_train, X_test, y_train, y_test
 
@@ -261,13 +266,13 @@ def convert_numeric(df):
     return df
 
 
-def process_data(_df, cfg, target, task_type, all= False):
+def process_data(_df, cfg, target, task_type, split_value, all= False):
     _DF= missing(_df, cfg['clean'])
     _DF= remove_outliers(_DF, cfg['outlier'])
     if all:
         return _DF
 
-    X_train, X_test, y_train, y_test= handle(_DF, target, task_type)
+    X_train, X_test, y_train, y_test= handle(_DF, target, split_value, task_type)
     return X_train, X_test, y_train, y_test
 
 class SkewnessTransformer(BaseEstimator, TransformerMixin):
@@ -978,3 +983,69 @@ def og_waterfall(shap_values, max_display=10, show=True):
         plt.show()
     else:
         return plt.gca()
+    
+
+
+def silhouette_analysis(df, start_k, stop_k, figsize=(15, 16)):
+    """
+    Perform Silhouette analysis for a range of k values and visualize the results.
+    """
+
+    # Set the size of the figure
+    plt.figure(figsize=figsize)
+
+    # Create a grid with (stop_k - start_k + 1) rows and 2 columns
+    grid = gridspec.GridSpec(stop_k - start_k + 1, 2)
+
+    # Assign the first plot to the first row and both columns
+    _ = plt.subplot(grid[0, :])
+
+    # First plot: Silhouette scores for different k values
+    sns.set_palette(['darkorange'])
+
+    silhouette_scores = []
+
+    # Iterate through the range of k values
+    for k in range(start_k, stop_k + 1):
+        km = KMeans(n_clusters=k, init='k-means++', n_init=10, max_iter=100, random_state=0)
+        km.fit(df)
+        labels = km.predict(df)
+        score = silhouette_score(df, labels)
+        silhouette_scores.append(score)
+
+    best_k = start_k + silhouette_scores.index(max(silhouette_scores))
+
+    plt.plot(range(start_k, stop_k + 1), silhouette_scores, marker='o')
+    plt.xticks(range(start_k, stop_k + 1))
+    plt.xlabel('Number of clusters (k)')
+    plt.ylabel('Silhouette score')
+    plt.title('Average Silhouette Score for Different k Values', fontsize=15)
+
+    # Add the optimal k value text to the plot
+    optimal_k_text = f'The k value with the highest Silhouette score is: {best_k}'
+    plt.text(10, 0.23, optimal_k_text, fontsize=12, verticalalignment='bottom', 
+             horizontalalignment='left', bbox=dict(facecolor='#fcc36d', edgecolor='#ff6200', boxstyle='round, pad=0.5'))
+             
+
+    # Second plot (subplot): Silhouette plots for each k value
+    colors = sns.color_palette("bright")
+
+    for i in range(start_k, stop_k + 1):    
+        km = KMeans(n_clusters=i, init='k-means++', n_init=10, max_iter=100, random_state=0)
+        row_idx, col_idx = divmod(i - start_k, 2)
+
+        # Assign the plots to the second, third, and fourth rows
+        ax = plt.subplot(grid[row_idx + 1, col_idx])
+
+        visualizer = SilhouetteVisualizer(km, colors=colors, ax=ax)
+        visualizer.fit(df)
+
+        # Add the Silhouette score text to the plot
+        score = silhouette_score(df, km.labels_)
+        ax.text(0.97, 0.02, f'Silhouette Score: {score:.2f}', fontsize=12, \
+                ha='right', transform=ax.transAxes, color='red')
+
+        ax.set_title(f'Silhouette Plot for {i} Clusters', fontsize=15)
+
+    plt.tight_layout()
+    plt.show()
