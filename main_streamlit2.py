@@ -148,21 +148,81 @@ if uploaded_file:
     If you encounter high missing values or duplicates, consider cleaning the data for optimal results.
     """)
 
+    # Data Preprocessing
+    st.markdown("### Step 3: Data Preprocessing")
+    cfg = {'save': True}  # for inference stability it's fixed
+
+    with st.expander(" :broom: Handle Missing Data"):
+        cfg["clean"] = st.selectbox(
+            "Choose how to handle missing data:",
+            ["Remove Missing Data", "Impute Missing Data"],
+            help="Select whether to remove or impute missing values."
+        )
+    with st.expander("📉 Handle Outliers"):
+        # Create two columns for horizontal alignment
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
+            Removes or adjusts extreme data points that can skew results. Choose from:
+            - **Don't Remove**: Keep all data points, including outliers.
+            - **Use IQR**: Remove data points that are too far from the usual range of most data. For example, it’s like
+              ignoring the very low and very high prices in a list of product sales to focus on the middle range.
+            - **Isolation Forest**: Use machine learning algorithms to handle outliers.
+            """)
+
+        with col2:
+            st.image("static/imgs/outliers.png", use_container_width=True)
+        cfg["outlier"] = st.selectbox(
+            "How would you like to handle outliers?",
+            ["Don't Remove", "Use IQR", "Isolation Forest"],
+            help="Select an outlier handling technique."
+        )
+    with st.expander("🔄 Fix Skewed Data"):
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
+            Transforms skewed distributions to be more symmetrical, enhancing model accuracy.
+            Particularly useful for data with highly asymmetric values.
+            """)
+        with col2:
+            st.image("static/imgs/skewness.png", use_container_width=True)
+        cfg["skew_fix"] = st.checkbox(
+            "Fix Skewed Data?",
+            help="Enable or disable skewed data transformation."
+        )
+
+    with st.expander("🔢 Add Polynomial Features"):
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
+        Creates new features by raising existing features to a power, helping the model capture non-linear relationships.
+        Useful for regression tasks with complex data relationships.
+        """)
+        with col2:
+            st.image("static/imgs/polynomials.png", use_container_width=True)
+        cfg["poly_feat"] = st.checkbox(
+            "Add Polynomial Features?",
+            help="Enable or disable the addition of polynomial features."
+        )
+
     # Task Configuration
-    st.markdown("### Step 3: Configure Your Task")
+    st.markdown("### Step 4: Configure Your Task")
     # cfg = {"save": True}
     # target = st.selectbox("🎯 Select Target Variable", df.columns, help="Choose the column you want to predict.")
     # exclude_columns = st.multiselect("❌ Select Columns to Exclude", df.columns)
     # df_filtered = df.drop(columns=exclude_columns)
-    cfg = {'save': True}  # for inference stability it's fixed
+
     back_DF = df.copy()
     cols = back_DF.columns
     target = st.selectbox("🎯 Select Target Variable", cols, help="Choose the column you want to predict.")
-    selected_options = st.multiselect("❌ Select Columns to Exclude", cols, help= "Excluded columns will not be used by the model")
+    selected_options = st.multiselect("❌ Select Columns to Exclude", cols,
+                                      help="Excluded columns will not be used by the model")
     DF = back_DF.drop(selected_options, axis=1)
 
-    validation_size = st.slider("📊 Select Validation Size (%) : recommended value: 20% ", min_value=1, max_value=100, value=20)
-    task_type = st.radio("⚙️ Select Task Type", ["Classification", "Regression", "Time"], index=0, help="Select the task type")
+    validation_size = st.slider("📊 Select Validation Size (%) : recommended value: 20% ", min_value=1, max_value=100,
+                                value=20)
+    task_type = st.radio("⚙️ Select Task Type", ["Classification", "Regression", "Time"], index=0,
+                         help="Select the task type")
 
     model_mapping = {
         # Classification Models
@@ -210,7 +270,9 @@ if uploaded_file:
     # Provide explanations and visuals dynamically based on selection
     if task_type == "Classification":
         st.markdown("#### Classification: 🔍")
-        st.write("""
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
         **Use Case**: Predict a category or label (e.g., spam vs. non-spam, yes vs. no).
 
         **Examples**:
@@ -219,12 +281,15 @@ if uploaded_file:
 
         **Models**: SVC, Logistic Regression, Random Forest, XGBoost.
         """)
-        st.image("static/imgs/classification.png",
-                 caption="Example: Classification", use_container_width =True)
+        with col2:
+            st.image("static/imgs/classification.png",
+                 caption="Example: Classification", use_container_width=True)
 
     elif task_type == "Regression":
         st.markdown("#### Regression: 📈")
-        st.write("""
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
         **Use Case**: Predict a continuous value (e.g., sales, stock prices, temperatures).
 
         **Examples**:
@@ -233,12 +298,15 @@ if uploaded_file:
 
         **Models**: Linear Regression, Ridge, Lasso, SVR, XGBoost.
         """)
-        st.image("static/imgs/regression.png",
-                 caption="Example: Linear Regression", use_container_width =True)
+        with col2:
+            st.image("static/imgs/regression.png",
+                 caption="Example: Linear Regression", use_container_width=False, )
 
     elif task_type == "Time":
         st.markdown("#### Time Series: ⏳")
-        st.write("""
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
         **Use Case**: Analyze patterns over time and predict future values (e.g., sales trends, stock prices, weather forecasting).
 
         **Examples**:
@@ -247,16 +315,17 @@ if uploaded_file:
 
         **Models**: Prophet, LSTM.
         """)
-        st.image("static/imgs/timeseries.png",
-                 caption="Example: Time Series Forecasting", use_container_width =True)
+        with col2:
+            st.image("static/imgs/timeseries.png",
+                 caption="Example: Time Series Forecasting", use_container_width=True)
 
     # Task-Specific Configuration
     if task_type == "Classification":
         available_models = {k: v for k, v in model_mapping.items() if "Classifier" in k}
         st.markdown("#### Classification Options")
         cfg["task_type"] = task_type
-        cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
-        cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
+        # cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
+        # cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
 
         # User-friendly model selection
         selected_model_label = st.selectbox(
@@ -269,17 +338,20 @@ if uploaded_file:
         selected_model = available_models[selected_model_label]
         cfg["alg"] = selected_model["code"]
 
-        cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
-        cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-        cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters")
+        # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
+        # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
+        cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                                              "machine learning model, like adjusting settings on a machine to "
+                                              "achieve peak efficiency and accuracy")
 
     elif task_type == "Regression":
         st.markdown("#### Regression Options")
         cfg["task_type"] = task_type
-        available_models = {k: v for k, v in model_mapping.items() if ("Regression" in k or "Regressor" in k) and 'Logistic' not in k}
+        available_models = {k: v for k, v in model_mapping.items() if
+                            ("Regression" in k or "Regressor" in k) and 'Logistic' not in k}
 
-        cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
-        cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
+        # cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
+        # cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
         # User-friendly model selection
         selected_model_label = st.selectbox(
             "🤖 Select Model",
@@ -290,17 +362,22 @@ if uploaded_file:
         # Retrieve backend code and recommendation for the selected model
         selected_model = available_models[selected_model_label]
         cfg["alg"] = selected_model["code"]
-        cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
-        cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-        cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters")
+        # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
+        # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
+        cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                                              "machine learning model, like adjusting settings on a machine to "
+                                              "achieve peak efficiency and accuracy")
 
     elif task_type == "Time":
         st.markdown("#### Time Series Options")
         cfg["task_type"] = task_type
         ts_kw = {}
-        cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
-        cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
-        cfg["alg"] = st.selectbox("📈 Select Model", ["Prophet", "LSTM"])
+        # cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
+        # cfg["outlier"] = st.selectbox("📉 Handle Outliers", ["Don't Remove", "Use IQR", "Isolation Forest"])
+        # temporary disable model selection and use Prophet Model by default
+        #cfg["alg"] = st.selectbox("📈 Select Model", ["Prophet", "LSTM"])
+        cfg['alg'] = 'Prophet'
+
 
         if cfg['alg'] == 'Prophet':
             ts_kw['date_col'] = st.selectbox('Select The Date Column', DF.columns)
@@ -311,8 +388,8 @@ if uploaded_file:
             ts_kw['f_period'] = 5
             cfg['ts_config'] = ts_kw
 
-        cfg['skew_fix'] = st.checkbox('Skew Fix')
-        cfg['poly_feat'] = False
+        # cfg['skew_fix'] = st.checkbox('Skew Fix')
+        # cfg['poly_feat'] = False
         cfg['apply_GridSearch'] = False
 
         print(cfg['task_type'])
@@ -342,9 +419,9 @@ if uploaded_file:
             st.write("Performing Time Series Analysis")
             ts_df = utils.process_data(DF, cfg, target, task_type, all=True)
             pf = model(ts_df, cfg=cfg)
-            #st.plotly_chart(pf.slide_display())
-            #st.pyplot(pf.plot_forcast())
-            #st.pyplot(pf.plot_component())
+            # st.plotly_chart(pf.slide_display())
+            # st.pyplot(pf.plot_forcast())
+            # st.pyplot(pf.plot_component())
             # Constrain Plotly Slide Display
             plotly_fig = pf.slide_display()
             # plotly_fig.update_layout(
@@ -355,16 +432,16 @@ if uploaded_file:
 
             # Constrain Matplotlib Forecast Plot
             forecast_fig = pf.plot_forcast()
-            #forecast_fig.set_size_inches(10, 3)  # Adjust size
+            # forecast_fig.set_size_inches(10, 3)  # Adjust size
             st.pyplot(forecast_fig)
 
             # Constrain Matplotlib Component Plot
             component_fig = pf.plot_component()
-            #component_fig.set_size_inches(10, 3)  # Adjust size
+            # component_fig.set_size_inches(10, 3)  # Adjust size
             st.pyplot(component_fig)
-            
+
     if task_type != "Time":
-    
+
         # Inference Section
         st.markdown("### 🔍 What If / Inference")
         st.write("""Provide input values to test your trained model interactively.""")
@@ -374,8 +451,8 @@ if uploaded_file:
 
         # Dynamic User Input Form
         st.markdown("#### Provide Input Values for Prediction")
-        input_cols = [column for column in DF.columns if column != target ]
-        for column in input_cols :
+        input_cols = [column for column in DF.columns if column != target]
+        for column in input_cols:
             if d_types.loc[column].values[0] == 'object':  # Categorical columns
                 user_input = st.selectbox(
                     f"Select a value for **{column}**:",
@@ -424,7 +501,7 @@ if uploaded_file:
                         st.error("Class labels are missing. Unable to display probabilities.")
 
                 elif task_type == "Regression":
-                    preds = max(inference(inf_df),1)
+                    preds = max(inference(inf_df), 1)
 
                     st.markdown("#### 📊 Predicted Output")
                     st.write(f"**Prediction:** for {target} {preds}")
@@ -441,7 +518,6 @@ if uploaded_file:
 
             except Exception as e:
                 st.error(f"An error occurred during inference: {e}")
-
 
     # Upload testing data
     # Add functionality to upload test data
