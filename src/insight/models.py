@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import warnings
 
 from .utils import SkewnessTransformer
 from .model_utils import grid_dict
@@ -12,7 +13,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler, P
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error, r2_score, silhouette_score
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -25,6 +26,8 @@ from sklearn.svm import SVC, SVR
 from sklearn.ensemble import AdaBoostClassifier 
 from sklearn.tree import DecisionTreeClassifier
 
+from sklearn.cluster import KMeans, DBSCAN
+
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
 
@@ -35,12 +38,12 @@ matplotlib.use('Agg')
 # prophet_kw= {'date_col': None,
 #              'target_col': None}
 
-models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
+models_dict= {'SVC': SVC(probability= True), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
               'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
               'RF_cls': RandomForestClassifier(), 'XGB_cls': XGBClassifier(), 'XGB_reg': XGBRegressor(),
               'Ridge': Ridge(), 'Lasso': Lasso(), 'extra_tree': ExtraTreesClassifier(), 'SVR': SVR(),
               'GradientBoosting_cls': GradientBoostingClassifier(), 'Adaboost': AdaBoostClassifier(),
-              'DecisionTree_cls': DecisionTreeClassifier()}
+              'DecisionTree_cls': DecisionTreeClassifier(), 'kmeans': KMeans(), 'dbscan': DBSCAN()}
 
 normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
 
@@ -48,6 +51,8 @@ normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_rang
 class BaseModel(ABC):
     def __init__(self, algorithm, grid=False):
         self.pipeline = None
+        self.algorithm= algorithm
+        self.grid= grid
 
     @abstractmethod
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
@@ -121,20 +126,33 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
     def predict(self, X):
         return self.best_estimator_.predict(X)
 
-    def predict_proba(self, X):
+    def predict_prob(self, X):
         return self.best_estimator_.predict_proba(X)
 
 
 class Model:
-    def __init__(self, algorithm, grid=False):
+    def __init__(self, algorithm, grid=False, model_kws= None):
+        """
+        Initialize the model with an algorithm and optional grid search.
+
+        Parameters:
+        algorithm (sklearn-compatible algorithm)
+        grid (bool): Whether to apply grid search. Default is False.
+        """
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
+        if grid == True and model_kws is not None:
+            warnings.warn("Can't use grid search with predefined model kwargs, setting kwargs to None...")
+            model_kws= None
 
         if algorithm in models_dict.keys():
             self.algorithm = models_dict[algorithm]
         else:
             raise NotImplementedError
+        
+        if model_kws is not None:
+            self.algorithm.set_params(**model_kws)
         
         self.grid = grid
 
@@ -142,6 +160,14 @@ class Model:
             self.grid_model = GridSearchModel(alg= self.algorithm, grid_params= grid_dict[algorithm])
 
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
+        """
+        Build the preprocessing pipeline.
+
+        Parameters:
+        X (pd.DataFrame): The input data to derive preprocessing steps.
+        poly_feat (bool): Whether to apply polynomial feature generation.
+        skew_fix (bool): Whether to apply skewness correction.
+        """
         categorical_features = X.select_dtypes('object').columns.tolist()
         numerical_features = X.select_dtypes('number').columns.tolist() 
 
@@ -192,26 +218,69 @@ class Model:
 
         return d, self.label_encoder.transform(y)
 
-    def train(self, X: pd.DataFrame, y: pd.Series, skew, poly):
+    def train(self, X: pd.DataFrame, y: pd.Series= None, skew= False, poly= False):
+        """
+        Train the model.
+
+        Parameters:
+        X (pd.DataFrame): The input features.
+        y (pd.Series): Target labels (if applicable, for supervised tasks).
+        skew (bool): Apply skewness correction.
+        poly (bool): Apply polynomial features.
+        """
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
-        if y.dtypes == 'object':
+        if y is not None and y.dtypes == 'object':
             y = self.label_encoder.fit_transform(y)
 
         self.pipeline.fit(X, y)
         self.model = self.pipeline.named_steps['model']
 
     def preprocess(self, X):
+        """
+        Preprocess the input data using the fitted pipeline.
+
+        Parameters:
+        X (pd.DataFrame): The input data to preprocess.
+        """
         return self.pipeline.named_steps['preprocessor'].transform(X)
 
     def predict(self, X):
+        """
+        Predict clusters or labels for the input data.
+
+        Parameters:
+        X (pd.DataFrame): The input data.
+        
+        Returns:
+        array-like: Predicted clusters or labels.
+        """
         X = self.preprocess(X)
         return self.model.predict(X)
     
     def predict_prob(self, X):
+        """
+        Predict probabilities for the input data (for models supporting probabilities).
+
+        Parameters:
+        X (pd.DataFrame): The input data.
+        
+        Returns:
+        array-like: Predicted probabilities.
+        """
         X= self.preprocess(X)
         return self.model.predict_proba(X)
 
     def cls_metrics(self, X, y_true):
+        """
+        Compute classification metrics (accuracy and confusion matrix).
+
+        Parameters:
+        X (pd.DataFrame): Input features.
+        y_true (pd.Series): True labels.
+        
+        Returns:
+        tuple: Confusion matrix and accuracy score.
+        """
         y_pred = self.predict(X)
         if y_true.dtypes == 'object':
             y_pred = self.label_encoder.inverse_transform(y_pred)
@@ -222,6 +291,16 @@ class Model:
         return cm, accuracy
     
     def reg_metrics(self, X, y_true):
+        """
+        Compute regression metrics (MSE and R2 score).
+
+        Parameters:
+        X (pd.DataFrame): Input features.
+        y_true (pd.Series): True target values.
+        
+        Returns:
+        tuple: Mean squared error and R2 score.
+        """
         y_pred = self.predict(X)
 
         mse = mean_squared_error(y_true, y_pred)
@@ -231,6 +310,12 @@ class Model:
     
 
     def save_model(self, file_path):
+        """
+        Save the trained model to a file.
+
+        Parameters:
+        file_path (str): Path to save the model.
+        """
         with open(file_path, 'wb') as f:
             pickle.dump(self, f)
         print(f"Model saved successfully as: {file_path}")
@@ -245,7 +330,7 @@ def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
         pf.fit_transform(X_train)
         return pf
 
-    _model= Model(cfg['alg'], cfg['apply_GridSearch'])
+    _model= Model(cfg['alg'], cfg['apply_GridSearch'], model_kws= cfg['model_kw'])
     _model.train(X_train, y_train, cfg['skew_fix'], cfg['poly_feat'])
     if cfg['save']:
         _model.save_model('model.pkl')
@@ -264,11 +349,12 @@ def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
 
 def inference(X, proba= False):
     try:
+        _model: Model
         with open('model.pkl', 'rb') as f:
             _model= pickle.load(f)
 
         if proba:
-            return _model.pipeline.predict_proba(X)
+            return _model.predict_prob(X)
         
         return _model.pipeline.predict(X)
     except FileNotFoundError:

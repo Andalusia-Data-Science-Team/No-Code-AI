@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd, numpy as np, random
-import src.insight.utils as utils
-from src.insight.models import model, inference, get_corresponding_labels
+import insight.utils as utils
+from insight.models import model, inference, get_corresponding_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
@@ -11,9 +11,9 @@ matplotlib.use('Agg')
 
 st.info("Click Browse Files")
 uploaded_file = st.file_uploader("Upload Data/Model")
-SEED = int(st.number_input('Enter a Seed', value=42))
-st.write(f'Using {SEED} as a seed')
-np.random.seed(SEED)
+# SEED = int(st.number_input('Enter a Seed', value=42))
+# st.write(f'Using {SEED} as a seed')
+np.random.seed(42)
 
 
 if uploaded_file is not None:
@@ -51,14 +51,15 @@ if uploaded_file is not None:
 
     if 'df' in locals():
         cfg= {'save': True} # for inference stability it's fixed
+        cfg['model_kw']= None
         back_DF= df.copy()
         cols= back_DF.columns
         target = st.selectbox('Select The Target', cols)
         selected_options = st.multiselect('Select columns to be removed', cols)
         DF= back_DF.drop(selected_options, axis= 1)
 
-        value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
-        task_type = st.radio("Select Task Type", ["Regression", "Classification", "Time"], index=0, help="Select the task type")
+        split_value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
+        task_type = st.radio("Select Task Type", ["Regression", "Classification", "Time", "Cluster"], index=0, help="Select the task type")
 
         if task_type == "Classification":
             st.write("Classification task selected")
@@ -103,6 +104,20 @@ if uploaded_file is not None:
             cfg['poly_feat']= False
             cfg['apply_GridSearch']= False
 
+        elif task_type == "Cluster":
+            st.write("Clustering task selected")
+            cfg['task_type']= task_type
+            cfg['clean'] = st.selectbox("Clean Data", ["Remove Missing Data", "Impute Missing Data"])
+            cfg['outlier'] = st.selectbox("Remove Outliers", ["Don't Remove Outliers", "Use IQR", "Use Isolation Forest"])
+            cfg['alg'] = st.selectbox("Select The Model", ["kmeans", "dbscan"])
+            if cfg['alg'] == "kmeans":
+                clusters = st.number_input("Enter the number of clusters for the KMeans, -1 for the system to choose the best", min_value=None, max_value=None, step=1)
+                # for additinal kwargs
+                cfg['model_kw']= {"n_clusters": clusters}
+            cfg['pca']= st.checkbox('Apply PCA')
+            cfg['skew_fix']= st.checkbox('Skew Fix')
+            cfg['poly_feat']= st.checkbox('Add Polynomial Features')
+            cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
 
         else:
             # time series
@@ -112,7 +127,7 @@ if uploaded_file is not None:
         if st.button('Apply'):
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
-                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("Accuracy:")
                 st.write(report[0])
@@ -122,7 +137,7 @@ if uploaded_file is not None:
             
             if task_type == "Regression":
                 st.write('Perform Regression task with option:')
-                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("MSE:")
                 st.write(report[0])
@@ -131,18 +146,28 @@ if uploaded_file is not None:
 
             if task_type == "Time":
                 st.write("Performing Time Series Analysis")
-                ts_df= utils.process_data(DF, cfg, target, task_type, all= True)
+                ts_df= utils.process_data(DF, cfg, target, task_type, split_value, all= True)
                 pf= model(ts_df, cfg= cfg)
                 st.plotly_chart(pf.slide_display())
                 st.pyplot(pf.plot_forcast())
                 st.pyplot(pf.plot_component())
+
+            if task_type == "Cluster":
+                st.write('Perform Clustering task with option:')
+                cluster_df= utils.process_data(DF, cfg, target, task_type, split_value, all= True)
+                report= model(cluster_df, cfg= cfg)
+                st.write("MSE:")
+                st.write(report[0])
+                st.write("R2:")
+                st.write(report[1])
+
 
         if st.button('Plot Graphs'):
             st.subheader('Outlier-Inlier Percentage')
             outlier_plt_df= utils.missing(back_DF, cfg['clean'])
             outlier_plt= utils.outlier_inlier_plot(outlier_plt_df)
             st.pyplot(outlier_plt)
-            heatMap_DF= utils.process_data(back_DF, cfg, target, task_type, all= True)
+            heatMap_DF= utils.process_data(back_DF, cfg, target, task_type, split_value, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
             plot_data= utils.HeatMap(heatMap_DF)
@@ -176,7 +201,7 @@ if uploaded_file is not None:
         shap_df= DF[selected_cols]
 
         st.header("Xplain")
-        X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type)
+        X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
 
         feature_contribution= st.checkbox("Feature Contribution")
         classes= None
@@ -251,7 +276,3 @@ if uploaded_file is not None:
 
     else:
         raise ValueError('invalid')
-
-
-
-
