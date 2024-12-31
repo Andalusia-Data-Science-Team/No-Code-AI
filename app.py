@@ -127,7 +127,7 @@ if uploaded_file is not None:
         if st.button('Apply'):
             if task_type == "Classification":
                 st.write('Perform classification task with option:')
-                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, split_value, task_type)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("Accuracy:")
                 st.write(report[0])
@@ -137,7 +137,7 @@ if uploaded_file is not None:
             
             if task_type == "Regression":
                 st.write('Perform Regression task with option:')
-                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, split_value, task_type)
+                X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
                 report= model(X_train, X_test, y_train, y_test, cfg)
                 st.write("MSE:")
                 st.write(report[0])
@@ -167,7 +167,7 @@ if uploaded_file is not None:
             outlier_plt_df= utils.missing(back_DF, cfg['clean'])
             outlier_plt= utils.outlier_inlier_plot(outlier_plt_df)
             st.pyplot(outlier_plt)
-            heatMap_DF= utils.process_data(back_DF, cfg, target, task_type, all= True)
+            heatMap_DF= utils.process_data(back_DF, cfg, target, task_type, split_value, all= True)
             st.subheader('Heat Map')
             fig, ax = plt.subplots()
             plot_data= utils.HeatMap(heatMap_DF)
@@ -201,7 +201,7 @@ if uploaded_file is not None:
         shap_df= DF[selected_cols]
 
         st.header("Xplain")
-        X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, split_value, task_type)
+        X_train, X_test, y_train, y_test= utils.process_data(DF, cfg, target, task_type, split_value)
 
         feature_contribution= st.checkbox("Feature Contribution")
         classes= None

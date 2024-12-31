@@ -38,7 +38,7 @@ matplotlib.use('Agg')
 # prophet_kw= {'date_col': None,
 #              'target_col': None}
 
-models_dict= {'SVC': SVC(), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
+models_dict= {'SVC': SVC(probability= True), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
               'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
               'RF_cls': RandomForestClassifier(), 'XGB_cls': XGBClassifier(), 'XGB_reg': XGBRegressor(),
               'Ridge': Ridge(), 'Lasso': Lasso(), 'extra_tree': ExtraTreesClassifier(), 'SVR': SVR(),
@@ -349,11 +349,12 @@ def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
 
 def inference(X, proba= False):
     try:
+        _model: Model
         with open('model.pkl', 'rb') as f:
             _model= pickle.load(f)
 
         if proba:
-            return _model.predict_proba(X)
+            return _model.predict_prob(X)
         
         return _model.pipeline.predict(X)
     except FileNotFoundError:
