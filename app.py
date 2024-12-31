@@ -51,15 +51,18 @@ if uploaded_file is not None:
 
     if 'df' in locals():
         cfg= {'save': True} # for inference stability it's fixed
-        cfg['model_kw']= None
+        cfg['model_kw']= {}
         back_DF= df.copy()
+        target= ""
+        task_type = st.radio("Select Task Type", ["Regression", "Classification", "Time", "Cluster"], index=0, help="Select the task type")
         cols= back_DF.columns
-        target = st.selectbox('Select The Target', cols)
+        if task_type != "Cluster":
+            target = st.selectbox('Select The Target', cols)
         selected_options = st.multiselect('Select columns to be removed', cols)
         DF= back_DF.drop(selected_options, axis= 1)
 
         split_value = st.slider("Select validation size %validation", min_value=1, max_value=100, step=1)
-        task_type = st.radio("Select Task Type", ["Regression", "Classification", "Time", "Cluster"], index=0, help="Select the task type")
+        
 
         if task_type == "Classification":
             st.write("Classification task selected")
@@ -113,8 +116,14 @@ if uploaded_file is not None:
             if cfg['alg'] == "kmeans":
                 clusters = st.number_input("Enter the number of clusters for the KMeans, -1 for the system to choose the best", min_value=None, max_value=None, step=1)
                 # for additinal kwargs
-                cfg['model_kw']= {"n_clusters": clusters}
+                cfg['model_kw']["n_clusters"] = clusters
             cfg['pca']= st.checkbox('Apply PCA')
+            if cfg['pca']:
+                pca_data= utils.process_data(back_DF, cfg, target, task_type, split_value, all= True)
+                pca_fig, pca_comp= utils.PCA_visualization(pca_data)
+                st.pyplot(pca_fig)
+                pca_val= st.selectbox(f"from this data select the number of PCA compenets you want", [i for i in range(1, pca_comp + 1)])
+                cfg['pca_comp'] = pca_val
             cfg['skew_fix']= st.checkbox('Skew Fix')
             cfg['poly_feat']= st.checkbox('Add Polynomial Features')
             cfg['apply_GridSearch']= st.checkbox('Apply GridSearch')
@@ -156,10 +165,7 @@ if uploaded_file is not None:
                 st.write('Perform Clustering task with option:')
                 cluster_df= utils.process_data(DF, cfg, target, task_type, split_value, all= True)
                 report= model(cluster_df, cfg= cfg)
-                st.write("MSE:")
-                st.write(report[0])
-                st.write("R2:")
-                st.write(report[1])
+                st.pyplot(report)
 
 
         if st.button('Plot Graphs'):
@@ -180,7 +186,7 @@ if uploaded_file is not None:
             for skew_plot in skew_plots:
                 st.pyplot(skew_plot)
             
-            pca= utils.PCA_visualization(back_DF)
+            pca, _= utils.PCA_visualization(heatMap_DF)
             st.pyplot(pca)
 
 

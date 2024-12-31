@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import warnings
 
-from .utils import SkewnessTransformer
+from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransformer
 from .model_utils import grid_dict
 
 import pickle
@@ -131,7 +131,7 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
 
 
 class Model:
-    def __init__(self, algorithm, grid=False, model_kws= None):
+    def __init__(self, algorithm, grid=False, model_kws= {}):
         """
         Initialize the model with an algorithm and optional grid search.
 
@@ -142,7 +142,7 @@ class Model:
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
-        if grid == True and model_kws is not None:
+        if grid == True and len(model_kws) != 0:
             warnings.warn("Can't use grid search with predefined model kwargs, setting kwargs to None...")
             model_kws= None
 
@@ -177,16 +177,25 @@ class Model:
         ])
 
         numerical_transformer = Pipeline(steps=[
-            ('scaler', MinMaxScaler(feature_range=(0, 1)))
-        ])
+            ('num_imp', SimpleImputer(missing_values=np.nan, strategy="mean"))
+            ])
+
+        if not isinstance(self.algorithm, KMeans):
+            numerical_transformer.steps.append(('scaler', MinMaxScaler(feature_range=(0, 1))))  # Only scale if not KMeans
+
 
         if skew_fix:
+            numerical_transformer.steps = [step for step in numerical_transformer.steps if step[0] != "num_imp"]
             numerical_transformer.steps.append(('skew_fix', SkewnessTransformer(skew_limit=0.75))),
             numerical_transformer.steps.append(('num_imp', SimpleImputer(missing_values=np.nan, strategy="mean")))
 
         if poly_feat:
             numerical_transformer.steps.append(('Polynomial_Features', PolynomialFeatures(degree=2)))
             print('poly features applied')
+
+        if isinstance(self.algorithm, KMeans):
+            numerical_transformer.steps.append(('to_dataframe', PCADataFrameTransformer()))
+
 
         preprocessor = ColumnTransformer(transformers=[
             ('categorical', categorical_transformer, categorical_features),
@@ -199,10 +208,12 @@ class Model:
         else:
             model_step = ('model', self.algorithm)
 
-        self.pipeline = Pipeline(steps=[
+        steps= [
             ('preprocessor', preprocessor),
             model_step
-        ])
+        ]
+
+        self.pipeline = Pipeline(steps=steps)
 
     def reverse_label(self, y):
         classes = self.label_encoder.classes_
@@ -270,7 +281,7 @@ class Model:
         X= self.preprocess(X)
         return self.model.predict_proba(X)
 
-    def cls_metrics(self, X, y_true):
+    def cls_metrics(self, X: pd.DataFrame, y_true: pd.Series):
         """
         Compute classification metrics (accuracy and confusion matrix).
 
@@ -307,6 +318,10 @@ class Model:
         r2 = r2_score(y_true, y_pred)
 
         return mse, r2
+    
+    def cluster_metrics(self, X):
+        X= self.preprocess(X)
+        return silhouette_analysis(X, 2, 15)
     
 
     def save_model(self, file_path):
@@ -345,7 +360,7 @@ def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
         return mse, r2
     
     else:
-        raise ValueError('invalid Task')
+        return _model.cluster_metrics(X_train)
 
 def inference(X, proba= False):
     try:
