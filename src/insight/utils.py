@@ -17,8 +17,14 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import matplotlib.pyplot as plt
 
 import matplotlib.gridspec as gridspec
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import (
+    calinski_harabasz_score,
+    silhouette_score,
+    davies_bouldin_score,
+)
 from yellowbrick.cluster import SilhouetteVisualizer
+from tabulate import tabulate
+
 
 def list_wrap(x):
     """A helper to patch things since slicer doesn't handle arrays of arrays (it does handle lists of arrays)"""
@@ -27,20 +33,21 @@ def list_wrap(x):
     else:
         return x
 
+
 labels = {
-    'MAIN_EFFECT': "SHAP main effect value for\n%s",
-    'INTERACTION_VALUE': "SHAP interaction value",
-    'INTERACTION_EFFECT': "SHAP interaction value for\n%s and %s",
-    'VALUE': "SHAP value (impact on model output)",
-    'GLOBAL_VALUE': "mean(|SHAP value|) (average impact on model output magnitude)",
-    'VALUE_FOR': "SHAP value for\n%s",
-    'PLOT_FOR': "SHAP plot for %s",
-    'FEATURE': "Feature %s",
-    'FEATURE_VALUE': "Feature value",
-    'FEATURE_VALUE_LOW': "Low",
-    'FEATURE_VALUE_HIGH': "High",
-    'JOINT_VALUE': "Joint SHAP value",
-    'MODEL_OUTPUT': "Model output value"
+    "MAIN_EFFECT": "SHAP main effect value for\n%s",
+    "INTERACTION_VALUE": "SHAP interaction value",
+    "INTERACTION_EFFECT": "SHAP interaction value for\n%s and %s",
+    "VALUE": "SHAP value (impact on model output)",
+    "GLOBAL_VALUE": "mean(|SHAP value|) (average impact on model output magnitude)",
+    "VALUE_FOR": "SHAP value for\n%s",
+    "PLOT_FOR": "SHAP plot for %s",
+    "FEATURE": "Feature %s",
+    "FEATURE_VALUE": "Feature value",
+    "FEATURE_VALUE_LOW": "Low",
+    "FEATURE_VALUE_HIGH": "High",
+    "JOINT_VALUE": "Joint SHAP value",
+    "MODEL_OUTPUT": "Model output value",
 }
 
 
@@ -48,141 +55,277 @@ def format_value(s, format_str):
     """Strips trailing zeros and uses a unicode minus sign."""
     if not issubclass(type(s), str):
         s = format_str % s
-    s = re.sub(r'\.?0+$', '', s)
+    s = re.sub(r"\.?0+$", "", s)
     if s[0] == "-":
         s = "\u2212" + s[1:]
     return s
 
-def missing(_df, clean_method= 'Remove Missing Data'):
-    df= _df.copy()
-    df.drop_duplicates(inplace= True)
 
-    if clean_method == 'Remove Missing Data':
-        df.dropna(inplace= True)
+def missing(_df, clean_method="Remove Missing Data"):
+    df = _df.copy()
+    df.drop_duplicates(inplace=True)
+
+    if clean_method == "Remove Missing Data":
+        df.dropna(inplace=True)
         return df
-    
-    elif clean_method == 'Impute Missing Data':
-        numeric_features = df.select_dtypes(include=np.number).columns
-        numeric_imputer = SimpleImputer(strategy='mean')
-        df[numeric_features] = numeric_imputer.fit_transform(df[numeric_features])
 
+    elif clean_method == "Impute Missing Data":
+        numeric_features = df.select_dtypes(include=np.number).columns
+        numeric_imputer = SimpleImputer(strategy="mean")
+        df[numeric_features] = numeric_imputer.fit_transform(df[numeric_features])
 
         categorical_features = df.select_dtypes(include=object).columns
         if len(categorical_features) != 0:
-            categorical_imputer = SimpleImputer(strategy='most_frequent')
-            df[categorical_features] = categorical_imputer.fit_transform(df[categorical_features])
+            categorical_imputer = SimpleImputer(strategy="most_frequent")
+            df[categorical_features] = categorical_imputer.fit_transform(
+                df[categorical_features]
+            )
         return df
-    
+
     else:
-        raise ValueError('Invalied input for imputing')
-    
+        raise ValueError("Invalied input for imputing")
+
 
 def IQR(_df, lower_bound=0.25, upper_bound=0.75, multiplier=1.5):
-    df= _df.copy()
+    df = _df.copy()
     numeric_cols = df.select_dtypes(include=np.number).columns
     binary_cols = [col for col in numeric_cols if df[col].nunique() == 2]
     numeric_cols = [col for col in numeric_cols if col not in binary_cols]
-    sub_df= df[numeric_cols]
+    sub_df = df[numeric_cols]
 
     q1 = sub_df[numeric_cols].quantile(lower_bound)
     q3 = sub_df[numeric_cols].quantile(upper_bound)
     iqr = q3 - q1
-    sub_df = sub_df[~((sub_df < (q1 - multiplier * iqr)) |(sub_df > (q3 + multiplier * iqr))).any(axis=1)]
-    df= df.loc[sub_df.index]
+    sub_df = sub_df[
+        ~((sub_df < (q1 - multiplier * iqr)) | (sub_df > (q3 + multiplier * iqr))).any(
+            axis=1
+        )
+    ]
+    df = df.loc[sub_df.index]
     return df
 
+
 def IF(_df):
-    isolation_forest= IsolationForest()
-    df= _df.copy()
+    isolation_forest = IsolationForest()
+    df = _df.copy()
     numeric_cols = df.select_dtypes(include=np.number).columns
     binary_cols = [col for col in numeric_cols if df[col].nunique() == 2]
     numeric_cols = [col for col in numeric_cols if col not in binary_cols]
-    
-    num_df= df[numeric_cols]
+
+    num_df = df[numeric_cols]
     outlier_pred = isolation_forest.fit_predict(num_df)
 
     clean_features = df[outlier_pred == 1]
     return clean_features
 
-def remove_outliers(_df, method= "Don't Remove Outliers"):
-    if method == 'Use IQR':
+
+def remove_outliers(_df, method="Don't Remove Outliers"):
+    if method == "Use IQR":
         return IQR(_df)
-    elif method == 'Use Isolation Forest':
+    elif method == "Use Isolation Forest":
         return IF(_df)
     else:
         return _df
-    
-def handle(_df, trg, split_value, cls= 'Classification'):
-    X= _df.drop([trg], axis= 1)
-    y= _df[trg]
 
-    if cls == 'Classification':
-        X_train, X_test, y_train, y_test= train_test_split(X, y, test_size= split_value, stratify= y)
+
+def handle(_df, trg, split_value, cls="Classification"):
+    X = _df.drop([trg], axis=1)
+    y = _df[trg]
+
+    if cls == "Classification":
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=split_value, stratify=y
+        )
     else:
-        X_train, X_test, y_train, y_test= train_test_split(X, y, test_size= split_value, shuffle= False)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=split_value, shuffle=False
+        )
 
     return X_train, X_test, y_train, y_test
+
 
 def plot_numeric_features(df):
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     valid_cols = [col for col in numeric_cols if df[col].nunique() >= 10]
-    
+
     plots = []
     for col in valid_cols:
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.kdeplot(data=df[col], ax=ax)
-        
+
         skewness = stats.skew(df[col].dropna())
         _, p_value = stats.normaltest(df[col].dropna())
-        
-        ax.set_title(f'{col} Distribution\nSkewness: {skewness:.2f}, Normality Test p-value: {p_value:.4f}')
+
+        ax.set_title(
+            f"{col} Distribution\nSkewness: {skewness:.2f}, Normality Test p-value: {p_value:.4f}"
+        )
         ax.set_xlabel(col)
-        ax.set_ylabel('Density')
-        
+        ax.set_ylabel("Density")
+
         plots.append(fig)
-    
+
     excluded_cols = set(numeric_cols) - set(valid_cols)
     if excluded_cols:
-        print(f"Excluded columns (less than 10 unique values): {', '.join(excluded_cols)}")
-    
+        print(
+            f"Excluded columns (less than 10 unique values): {', '.join(excluded_cols)}"
+        )
+
     return plots
+
 
 class PCADataFrameTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, column_names=None):
         self.column_names = column_names
-    
+
     def fit(self, X, y=None):
-        return self  
-    
+        return self
+
     def transform(self, X):
         if isinstance(X, pd.DataFrame):
-            return X  
-        df = pd.DataFrame(X)
+            return X
+        df = pd.DataFrame(X.toarray())
         if self.column_names is not None:
             df.columns = self.column_names
         return df
 
+
 def pca_preprocessing(df: pd.DataFrame):
-    
-    st= StandardScaler()
+
+    st = StandardScaler()
     if issparse(df):
         df = pd.DataFrame(df.toarray())
 
-    df_uq = pd.DataFrame([[i, len(df[i].unique())] for i in df.columns], columns=['Variable', 'Unique Values']).set_index('Variable')
-    excluded_cols= list(df_uq[df_uq['Unique Values'] == 2].index)
+    df_uq = pd.DataFrame(
+        [[i, len(df[i].unique())] for i in df.columns],
+        columns=["Variable", "Unique Values"],
+    ).set_index("Variable")
+    excluded_cols = list(df_uq[df_uq["Unique Values"] == 2].index)
     columns_to_scale = df.columns.difference(excluded_cols)
     data_scaled = df.copy()
     data_scaled[columns_to_scale] = st.fit_transform(data_scaled[columns_to_scale])
     return data_scaled
 
 
+def cluster_dist(pca_data: pd.DataFrame):
+    cluster_percentage = (
+        pca_data["cluster"].value_counts(normalize=True) * 100
+    ).reset_index()
+    cluster_percentage.columns = ["Cluster", "Percentage"]
+    cluster_percentage.sort_values(by="Cluster", inplace=True)
+
+    # Create a horizontal bar plot
+    plt.figure(figsize=(10, 4))
+    sns.barplot(x="Percentage", y="Cluster", data=cluster_percentage, orient="h")
+
+    # Adding percentages on the bars
+    for index, value in enumerate(cluster_percentage["Percentage"]):
+        plt.text(value + 0.5, index, f"{value:.2f}%")
+
+    plt.title("Distribution Across Clusters", fontsize=14)
+    plt.xticks(ticks=np.arange(0, 50, 5))
+    plt.xlabel("Percentage (%)")
+
+    # Show the plot
+    return plt
+
+
+def cluster_eval(pca_data):
+    num_observations = len(pca_data)
+
+    # Separate the features and the cluster labels
+    X = pca_data.drop("cluster", axis=1)
+    clusters = pca_data["cluster"]
+
+    # Compute the metrics
+    sil_score = silhouette_score(X, clusters)
+    calinski_score = calinski_harabasz_score(X, clusters)
+    davies_score = davies_bouldin_score(X, clusters)
+
+    # Create a table to display the metrics and the number of observations
+    table_data = [
+        ["Number of Observations", num_observations],
+        ["Silhouette Score", sil_score],
+        ["Calinski Harabasz Score", calinski_score],
+        ["Davies Bouldin Score", davies_score],
+    ]
+
+    # Print the table
+    return tabulate(table_data, headers=["Metric", "Value"], tablefmt="pretty")
+
+
+def cluster_analysis(og_data):
+    colors = ["#e8000b", "#1ac938", "#023eff"]
+
+    # Standardize the data (excluding the cluster column)
+    scaler = StandardScaler()
+    df_customer_standardized = scaler.fit_transform(
+        og_data.drop(columns=["cluster"], axis=1)
+    )
+
+    # Create a new dataframe with standardized values and add the cluster column back
+    df_customer_standardized = pd.DataFrame(
+        df_customer_standardized, columns=og_data.columns[:-1], index=og_data.index
+    )
+    df_customer_standardized["cluster"] = og_data["cluster"]
+
+    # Calculate the centroids of each cluster
+    cluster_centroids = df_customer_standardized.groupby("cluster").mean()
+
+    # Function to create a radar chart
+    def create_radar_chart(ax, angles, data, color, cluster):
+        # Plot the data and fill the area
+        ax.fill(angles, data, color=color, alpha=0.4)
+        ax.plot(angles, data, color=color, linewidth=2, linestyle="solid")
+
+        # Add a title
+        ax.set_title(f"Cluster {cluster}", size=20, color=color, y=1.1)
+
+    # Set data
+    labels = np.array(cluster_centroids.columns)
+    num_vars = len(labels)
+
+    # Compute angle of each axis
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+
+    # The plot is circular, so we need to "complete the loop" and append the start to the end
+    labels = np.concatenate((labels, [labels[0]]))
+    angles += angles[:1]
+
+    # Initialize the figure
+    fig, ax = plt.subplots(
+        figsize=(20, 10), subplot_kw=dict(polar=True), nrows=1, ncols=3
+    )
+
+    # Create radar chart for each cluster
+    for i, color in enumerate(colors):
+        data = cluster_centroids.loc[i].tolist()
+        data += data[:1]  # Complete the loop
+        create_radar_chart(ax[i], angles, data, color, i)
+
+    # Add input data
+    ax[0].set_xticks(angles[:-1])
+    ax[0].set_xticklabels(labels[:-1])
+
+    ax[1].set_xticks(angles[:-1])
+    ax[1].set_xticklabels(labels[:-1])
+
+    ax[2].set_xticks(angles[:-1])
+    ax[2].set_xticklabels(labels[:-1])
+
+    # Add a grid
+    ax[0].grid(color="grey", linewidth=0.5)
+
+    # Display the plot
+    plt.tight_layout()
+    return plt
+
 
 def PCA_visualization(df):
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     valid_cols = [col for col in numeric_cols if df[col].nunique() >= 10]
-    df= df[valid_cols]
+    df = df[valid_cols]
 
-    data_scaled= pca_preprocessing(df)
+    data_scaled = pca_preprocessing(df)
 
     # Apply PCA
     pca = PCA().fit(data_scaled)
@@ -192,67 +335,94 @@ def PCA_visualization(df):
     cumulative_explained_variance = np.cumsum(explained_variance_ratio)
 
     # Set seaborn plot style
-    sns.set(rc={'axes.facecolor': '#fcf0dc'}, style='darkgrid')
+    sns.set(rc={"axes.facecolor": "#fcf0dc"}, style="darkgrid")
 
     # Plot the cumulative explained variance against the number of components
     plt.figure(figsize=(20, 10))
 
     # Bar chart for the explained variance of each component
-    barplot = sns.barplot(x=list(range(1, len(cumulative_explained_variance) + 1)),
-                        y=explained_variance_ratio)
+    barplot = sns.barplot(
+        x=list(range(1, len(cumulative_explained_variance) + 1)),
+        y=explained_variance_ratio,
+    )
 
     # Line plot for the cumulative explained variance
-    lineplot, = plt.plot(range(0, len(cumulative_explained_variance)), cumulative_explained_variance,
-                        marker='o', linestyle='--')
+    (lineplot,) = plt.plot(
+        range(0, len(cumulative_explained_variance)),
+        cumulative_explained_variance,
+        marker="o",
+        linestyle="--",
+    )
 
     # Set labels and title
-    plt.xlabel('Number of Components', fontsize=14)
-    plt.ylabel('Explained Variance', fontsize=14)
-    plt.title('Cumulative Variance vs. Number of Components', fontsize=18)
+    plt.xlabel("Number of Components", fontsize=14)
+    plt.ylabel("Explained Variance", fontsize=14)
+    plt.title("Cumulative Variance vs. Number of Components", fontsize=18)
 
     # Customize ticks and legend
     plt.xticks(range(0, len(cumulative_explained_variance)))
-    plt.legend(handles=[barplot.patches[0], lineplot],
-            labels=['Explained Variance of Each Component', 'Cumulative Explained Variance'],
-            loc=(0.62, 0.1),
-            frameon=True)  
+    plt.legend(
+        handles=[barplot.patches[0], lineplot],
+        labels=[
+            "Explained Variance of Each Component",
+            "Cumulative Explained Variance",
+        ],
+        loc=(0.62, 0.1),
+        frameon=True,
+    )
 
     # Display the variance values for both graphs on the plots
     x_offset = -0.3
     y_offset = 0.01
-    for i, (ev_ratio, cum_ev_ratio) in enumerate(zip(explained_variance_ratio, cumulative_explained_variance)):
+    for i, (ev_ratio, cum_ev_ratio) in enumerate(
+        zip(explained_variance_ratio, cumulative_explained_variance)
+    ):
         plt.text(i, ev_ratio, f"{ev_ratio:.2f}", ha="center", va="bottom", fontsize=10)
         if i > 0:
-            plt.text(i + x_offset, cum_ev_ratio + y_offset, f"{cum_ev_ratio:.2f}", ha="center", va="bottom", fontsize=10)
+            plt.text(
+                i + x_offset,
+                cum_ev_ratio + y_offset,
+                f"{cum_ev_ratio:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+            )
 
-    plt.grid(axis='both')   
+    plt.grid(axis="both")
     return plt, pca.n_components_
+
 
 def pca_data(df: pd.DataFrame, n_components: int):
     pca = PCA(n_components=n_components)
-    data_for_pca= pca_preprocessing(df)
+    data_for_pca = pca_preprocessing(df)
     proc_data_pca = pca.fit_transform(data_for_pca)
 
-    return pd.DataFrame(proc_data_pca, columns=['PC'+str(i+1) for i in range(pca.n_components_)])
+    return pd.DataFrame(
+        proc_data_pca, columns=["PC" + str(i + 1) for i in range(pca.n_components_)]
+    )
+
 
 def HeatMap(_df: pd.DataFrame):
-    return _df.select_dtypes('number').corr()
+    return _df.select_dtypes("number").corr()
+
 
 def corr_plot(_df: pd.DataFrame):
-    corr_matrix= _df.select_dtypes('number').corr()
-    tril_index= np.tril_indices_from(corr_matrix)
+    corr_matrix = _df.select_dtypes("number").corr()
+    tril_index = np.tril_indices_from(corr_matrix)
     for coord in zip(*tril_index):
         corr_matrix.iloc[coord[0], coord[1]] = np.nan
 
-    corr_values = (corr_matrix
-                .stack()
-                .to_frame()
-                .reset_index()
-                .rename(columns={'level_0':'feature1',
-                                    'level_1':'feature2',
-                                    0:'correlation'}))
-    corr_values['abs_correlation'] = corr_values.correlation.abs()
+    corr_values = (
+        corr_matrix.stack()
+        .to_frame()
+        .reset_index()
+        .rename(
+            columns={"level_0": "feature1", "level_1": "feature2", 0: "correlation"}
+        )
+    )
+    corr_values["abs_correlation"] = corr_values.correlation.abs()
     return corr_values
+
 
 def inf_proc(item):
     try:
@@ -263,14 +433,24 @@ def inf_proc(item):
 
 
 def descriptive_analysis(df):
-    num_des_analysis= df.describe().T
-    cat_des_analysis= df.describe(include= 'object').T
-    d_types= pd.DataFrame(df.dtypes, columns= ['type'])
-    missing_percentage= pd.DataFrame((df.isna().sum() / len(df)) * 100, columns=['missing %']).round(2)
-    dups_percentage= (len(df[df.duplicated()]) / len(df)) *100
-    unq_percentage= unique_percentage(df)
+    num_des_analysis = df.describe().T
+    cat_des_analysis = df.describe(include="object").T
+    d_types = pd.DataFrame(df.dtypes, columns=["type"])
+    missing_percentage = pd.DataFrame(
+        (df.isna().sum() / len(df)) * 100, columns=["missing %"]
+    ).round(2)
+    dups_percentage = (len(df[df.duplicated()]) / len(df)) * 100
+    unq_percentage = unique_percentage(df)
 
-    return num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage, unq_percentage
+    return (
+        num_des_analysis,
+        cat_des_analysis,
+        d_types,
+        missing_percentage,
+        dups_percentage,
+        unq_percentage,
+    )
+
 
 def outlier_inlier_plot(df):
     model = IsolationForest(contamination=0.05, random_state=0)
@@ -278,26 +458,27 @@ def outlier_inlier_plot(df):
     binary_cols = [col for col in numeric_cols if df[col].nunique() == 2]
     numeric_cols = [col for col in numeric_cols if col not in binary_cols]
 
-    num_df= df[numeric_cols]
-    num_df['Outlier_Scores'] = model.fit_predict(num_df.iloc[:, 1:].to_numpy())
+    num_df = df[numeric_cols]
+    num_df["Outlier_Scores"] = model.fit_predict(num_df.iloc[:, 1:].to_numpy())
 
-    num_df['Is_Outlier'] = [1 if x == -1 else 0 for x in num_df['Outlier_Scores']]
+    num_df["Is_Outlier"] = [1 if x == -1 else 0 for x in num_df["Outlier_Scores"]]
 
-    outlier_percentage = num_df['Is_Outlier'].value_counts(normalize=True) * 100
+    outlier_percentage = num_df["Is_Outlier"].value_counts(normalize=True) * 100
 
     plt.figure(figsize=(12, 4))
-    outlier_percentage.plot(kind='barh')
+    outlier_percentage.plot(kind="barh")
 
     for index, value in enumerate(outlier_percentage):
-        plt.text(value, index, f'{value:.2f}%', fontsize=15)
+        plt.text(value, index, f"{value:.2f}%", fontsize=15)
 
-    plt.title('Percentage of Inliers and Outliers')
+    plt.title("Percentage of Inliers and Outliers")
     plt.xticks(ticks=np.arange(0, 115, 5))
-    plt.xlabel('Percentage (%)')
-    plt.ylabel('Is Outlier')
+    plt.xlabel("Percentage (%)")
+    plt.ylabel("Is Outlier")
     plt.gca().invert_yaxis()
-    
+
     return plt
+
 
 def convert_numeric(df):
     for column in df.columns:
@@ -308,48 +489,53 @@ def convert_numeric(df):
     return df
 
 
-def process_data(_df, cfg, target, task_type, split_value, all= False):
-    _DF= missing(_df, cfg['clean'])
-    _DF= remove_outliers(_DF, cfg['outlier'])
+def process_data(_df, cfg, target, task_type, split_value, all=False):
+    _DF = missing(_df, cfg["clean"])
+    _DF = remove_outliers(_DF, cfg["outlier"])
     if all:
         return _DF
 
-    X_train, X_test, y_train, y_test= handle(_DF, target, split_value, task_type)
+    X_train, X_test, y_train, y_test = handle(_DF, target, split_value, task_type)
     return X_train, X_test, y_train, y_test
+
 
 class SkewnessTransformer(BaseEstimator, TransformerMixin):
 
-    def __init__(self, skew_limit=0.8, forced_fix= False):
+    def __init__(self, skew_limit=0.8, forced_fix=False):
         self.skew_limit = skew_limit
         self.forced_fix = forced_fix
         self.method_dict = {}
 
     def fit(self, X, y=None):
         if isinstance(X, pd.DataFrame):
-            X= X.to_numpy()
+            X = X.to_numpy()
         self.method_dict = self.extracrt_recommeneded_features(X)
         return self
 
     def transform(self, X):
         if isinstance(X, pd.DataFrame):
-            X= X.to_numpy()
+            X = X.to_numpy()
         X_transformed = X.copy()
         for method, features in self.method_dict.items():
 
-            if method == 'log':
+            if method == "log":
                 # Apply log transformation to the specified features
                 X_transformed[:, features] = np.log1p(X_transformed[:, features])
-            elif method == 'sqrt':
+            elif method == "sqrt":
                 # Apply square root transformation to the specified features
                 X_transformed[:, features] = np.sqrt(X_transformed[:, features])
-            elif method == 'boxcox':
+            elif method == "boxcox":
                 # Apply Box-Cox transformation to the specified features
                 for feature in features:
-                    X_transformed[:, feature], _ = stats.boxcox(X_transformed[:, feature])
-            elif method == 'yeojohnson':
+                    X_transformed[:, feature], _ = stats.boxcox(
+                        X_transformed[:, feature]
+                    )
+            elif method == "yeojohnson":
                 for feature in features:
-                    X_transformed[:, feature], _ = stats.yeojohnson(X_transformed[:, feature])
-            elif method == 'cube':
+                    X_transformed[:, feature], _ = stats.yeojohnson(
+                        X_transformed[:, feature]
+                    )
+            elif method == "cube":
                 # Apply Cube transformation to the specified features
                 X_transformed[:, features] = np.cbrt(X_transformed[:, features])
 
@@ -371,79 +557,90 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
 
         return method_dict
 
-    def recommend_skewness_reduction_method(self, feature: pd.Series, forced_fix= False) -> str:
+    def recommend_skewness_reduction_method(
+        self, feature: pd.Series, forced_fix=False
+    ) -> str:
 
         skewness_dict = {}
-        all= {}
+        all = {}
 
         transformed_log = np.log1p(feature)
         _, p_value = stats.normaltest(transformed_log)
 
-        # The p-value is a measure of the evidence against the null hypothesis of normality. 
-        # A low p-value (typically less than 0.05) suggests that the data is significantly different from a normal distribution, 
+        # The p-value is a measure of the evidence against the null hypothesis of normality.
+        # A low p-value (typically less than 0.05) suggests that the data is significantly different from a normal distribution,
         # indicating that the fix for skewness was not successful in achieving normality.
         if p_value > 0.05:
-            skewness_dict['log'] = p_value
+            skewness_dict["log"] = p_value
         else:
-            all['log']= p_value
+            all["log"] = p_value
 
         transformed_sqrt = np.sqrt(feature)
         _, p_value = stats.normaltest(transformed_sqrt)
         if p_value > 0.05:
-            skewness_dict['sqrt'] = p_value
+            skewness_dict["sqrt"] = p_value
         else:
-            all['sqrt']= p_value
+            all["sqrt"] = p_value
 
         if (feature < 0).any() or (feature == 0).any():
             transformed_yeojohnson, _ = stats.yeojohnson(feature)
             _, p_value = stats.normaltest(transformed_yeojohnson)
             if p_value > 0.05:
-                skewness_dict['yeojohnson'] = p_value
+                skewness_dict["yeojohnson"] = p_value
             else:
-                all['yeojohnson']= p_value
+                all["yeojohnson"] = p_value
 
         else:
             transformed_boxcox, _ = stats.boxcox(feature + 0.0001)
             _, p_value = stats.normaltest(transformed_boxcox)
             if p_value > 0.05:
-                skewness_dict['boxcox'] = p_value
+                skewness_dict["boxcox"] = p_value
             else:
-                all['boxcox']= p_value
+                all["boxcox"] = p_value
 
         transformed_cbrt = np.cbrt(feature)
         _, p_value = stats.normaltest(transformed_cbrt)
         if p_value > 0.05:
-            skewness_dict['cube'] = p_value
+            skewness_dict["cube"] = p_value
         else:
-            all['cube']= p_value
+            all["cube"] = p_value
 
         if len(skewness_dict) > 0:
             return max(skewness_dict, key=lambda y: abs(skewness_dict[y]))
         else:
             if forced_fix:
-                print('No Fix, using best transformers')
+                print("No Fix, using best transformers")
                 return max(all, key=lambda y: abs(all[y]))
             else:
-                return 'No Fix'
+                return "No Fix"
 
 
 def unique_percentage(df):
-    return pd.DataFrame({
-        'Column': df.columns,
-        'Unique_Percentage': [(df[col].nunique() / len(df[col])) * 100 for col in df.columns]
-    }).sort_values(by='Unique_Percentage', ascending=False).reset_index(drop=True)
+    return (
+        pd.DataFrame(
+            {
+                "Column": df.columns,
+                "Unique_Percentage": [
+                    (df[col].nunique() / len(df[col])) * 100 for col in df.columns
+                ],
+            }
+        )
+        .sort_values(by="Unique_Percentage", ascending=False)
+        .reset_index(drop=True)
+    )
 
 
-def my_waterfall(values, 
-              shap_values_base, 
-              shap_values_display_data, 
-              shap_values_data,
-              feature_names, 
-              max_display=-1, 
-              show=False,
-              lower_bounds= None,
-              upper_bounds= None):
-    
+def my_waterfall(
+    values,
+    shap_values_base,
+    shap_values_display_data,
+    shap_values_data,
+    feature_names,
+    max_display=-1,
+    show=False,
+    lower_bounds=None,
+    upper_bounds=None,
+):
     """
     For shap_values is an object of Explanation:
 
@@ -472,7 +669,11 @@ def my_waterfall(values,
 
     base_values = float(shap_values_base)
 
-    features = shap_values_display_data if shap_values_display_data is not None else shap_values_data
+    features = (
+        shap_values_display_data
+        if shap_values_display_data is not None
+        else shap_values_data
+    )
     # feature_names = shap_values.feature_names
     # values = shap_values.values
 
@@ -484,13 +685,15 @@ def my_waterfall(values,
 
     # fallback feature names
     if feature_names is None:
-        feature_names = np.array([labels['FEATURE'] % str(i) for i in range(len(values))])
+        feature_names = np.array(
+            [labels["FEATURE"] % str(i) for i in range(len(values))]
+        )
 
     # init variables we use for tracking the plot locations
     if max_display == -1 or max_display >= int(len(values)):
-        num_features = int(len(values))    
+        num_features = int(len(values))
     else:
-        num_features= max_display
+        num_features = max_display
     row_height = 0.5
     rng = range(num_features - 1, -1, -1)
     order = np.argsort(-np.abs(values))
@@ -536,16 +739,28 @@ def my_waterfall(values,
                 neg_high.append(upper_bounds[order[i]])
             neg_lefts.append(loc)
         if num_individual != num_features or i + 4 < num_individual:
-            plt.plot([loc, loc], [rng[i] - 1 - 0.4, rng[i] + 0.4],
-                     color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
+            plt.plot(
+                [loc, loc],
+                [rng[i] - 1 - 0.4, rng[i] + 0.4],
+                color="#bbbbbb",
+                linestyle="--",
+                linewidth=0.5,
+                zorder=-1,
+            )
         if features is None:
             yticklabels[rng[i]] = feature_names[order[i]]
         else:
 
             if np.issubdtype(type(features[order[i]]), np.number):
-                yticklabels[rng[i]] = format_value(float(features[order[i]]), "%0.03f") + " = " + feature_names[order[i]]
+                yticklabels[rng[i]] = (
+                    format_value(float(features[order[i]]), "%0.03f")
+                    + " = "
+                    + feature_names[order[i]]
+                )
             else:
-                yticklabels[rng[i]] = str(features[order[i]]) + " = " + str(feature_names[order[i]])
+                yticklabels[rng[i]] = (
+                    str(features[order[i]]) + " = " + str(feature_names[order[i]])
+                )
 
     # add a last grouped feature to represent the impact of all the features we didn't show
     if num_features < len(values):
@@ -560,17 +775,31 @@ def my_waterfall(values,
             neg_widths.append(-remaining_impact)
             neg_lefts.append(loc + remaining_impact)
 
-    points = pos_lefts + list(np.array(pos_lefts) + np.array(pos_widths)) + neg_lefts + \
-        list(np.array(neg_lefts) + np.array(neg_widths))
+    points = (
+        pos_lefts
+        + list(np.array(pos_lefts) + np.array(pos_widths))
+        + neg_lefts
+        + list(np.array(neg_lefts) + np.array(neg_widths))
+    )
     dataw = np.max(points) - np.min(points)
 
     # draw invisible bars just for sizing the axes
-    label_padding = np.array([0.1*dataw if w < 1 else 0 for w in pos_widths])
-    plt.barh(pos_inds, np.array(pos_widths) + label_padding + 0.02*dataw,
-             left=np.array(pos_lefts) - 0.01*dataw, color=colors.red_rgb, alpha=0)
-    label_padding = np.array([-0.1*dataw if -w < 1 else 0 for w in neg_widths])
-    plt.barh(neg_inds, np.array(neg_widths) + label_padding - 0.02*dataw,
-             left=np.array(neg_lefts) + 0.01*dataw, color=colors.blue_rgb, alpha=0)
+    label_padding = np.array([0.1 * dataw if w < 1 else 0 for w in pos_widths])
+    plt.barh(
+        pos_inds,
+        np.array(pos_widths) + label_padding + 0.02 * dataw,
+        left=np.array(pos_lefts) - 0.01 * dataw,
+        color=colors.red_rgb,
+        alpha=0,
+    )
+    label_padding = np.array([-0.1 * dataw if -w < 1 else 0 for w in neg_widths])
+    plt.barh(
+        neg_inds,
+        np.array(neg_widths) + label_padding - 0.02 * dataw,
+        left=np.array(neg_lefts) + 0.01 * dataw,
+        color=colors.blue_rgb,
+        alpha=0,
+    )
 
     # define variable we need for plotting the arrows
     head_length = 0.08
@@ -580,7 +809,7 @@ def my_waterfall(values,
     ax = plt.gca()
     bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
     width = bbox.width
-    bbox_to_xscale = xlen/width
+    bbox_to_xscale = xlen / width
     hl_scaled = bbox_to_xscale * head_length
     renderer = fig.canvas.get_renderer()
 
@@ -588,22 +817,33 @@ def my_waterfall(values,
     for i in range(len(pos_inds)):
         dist = pos_widths[i]
         arrow_obj = plt.arrow(
-            pos_lefts[i], pos_inds[i], max(dist-hl_scaled, 0.000001), 0,
+            pos_lefts[i],
+            pos_inds[i],
+            max(dist - hl_scaled, 0.000001),
+            0,
             head_length=min(dist, hl_scaled),
-            color=colors.red_rgb, width=bar_width,
+            color=colors.red_rgb,
+            width=bar_width,
             head_width=bar_width,
         )
 
         if pos_low is not None and i < len(pos_low):
             plt.errorbar(
-                pos_lefts[i] + pos_widths[i], pos_inds[i],
-                xerr=np.array([[pos_widths[i] - pos_low[i]], [pos_high[i] - pos_widths[i]]]),
+                pos_lefts[i] + pos_widths[i],
+                pos_inds[i],
+                xerr=np.array(
+                    [[pos_widths[i] - pos_low[i]], [pos_high[i] - pos_widths[i]]]
+                ),
                 ecolor=colors.light_red_rgb,
             )
 
         txt_obj = plt.text(
-            pos_lefts[i] + 0.5*dist, pos_inds[i], format_value(pos_widths[i], '%+0.02f'),
-            horizontalalignment='center', verticalalignment='center', color="white",
+            pos_lefts[i] + 0.5 * dist,
+            pos_inds[i],
+            format_value(pos_widths[i], "%+0.02f"),
+            horizontalalignment="center",
+            verticalalignment="center",
+            color="white",
             fontsize=12,
         )
         text_bbox = txt_obj.get_window_extent(renderer=renderer)
@@ -614,8 +854,12 @@ def my_waterfall(values,
             txt_obj.remove()
 
             txt_obj = plt.text(
-                pos_lefts[i] + (5/72)*bbox_to_xscale + dist, pos_inds[i], format_value(pos_widths[i], '%+0.02f'),
-                horizontalalignment='left', verticalalignment='center', color=colors.red_rgb,
+                pos_lefts[i] + (5 / 72) * bbox_to_xscale + dist,
+                pos_inds[i],
+                format_value(pos_widths[i], "%+0.02f"),
+                horizontalalignment="left",
+                verticalalignment="center",
+                color=colors.red_rgb,
                 fontsize=12,
             )
 
@@ -624,22 +868,33 @@ def my_waterfall(values,
         dist = neg_widths[i]
 
         arrow_obj = plt.arrow(
-            neg_lefts[i], neg_inds[i], -max(-dist-hl_scaled, 0.000001), 0,
+            neg_lefts[i],
+            neg_inds[i],
+            -max(-dist - hl_scaled, 0.000001),
+            0,
             head_length=min(-dist, hl_scaled),
-            color=colors.blue_rgb, width=bar_width,
+            color=colors.blue_rgb,
+            width=bar_width,
             head_width=bar_width,
         )
 
         if neg_low is not None and i < len(neg_low):
             plt.errorbar(
-                neg_lefts[i] + neg_widths[i], neg_inds[i],
-                xerr=np.array([[neg_widths[i] - neg_low[i]], [neg_high[i] - neg_widths[i]]]),
+                neg_lefts[i] + neg_widths[i],
+                neg_inds[i],
+                xerr=np.array(
+                    [[neg_widths[i] - neg_low[i]], [neg_high[i] - neg_widths[i]]]
+                ),
                 ecolor=colors.light_blue_rgb,
             )
 
         txt_obj = plt.text(
-            neg_lefts[i] + 0.5*dist, neg_inds[i], format_value(neg_widths[i], '%+0.02f'),
-            horizontalalignment='center', verticalalignment='center', color="white",
+            neg_lefts[i] + 0.5 * dist,
+            neg_inds[i],
+            format_value(neg_widths[i], "%+0.02f"),
+            horizontalalignment="center",
+            verticalalignment="center",
+            color="white",
             fontsize=12,
         )
         text_bbox = txt_obj.get_window_extent(renderer=renderer)
@@ -650,66 +905,100 @@ def my_waterfall(values,
             txt_obj.remove()
 
             txt_obj = plt.text(
-                neg_lefts[i] - (5/72)*bbox_to_xscale + dist, neg_inds[i], format_value(neg_widths[i], '%+0.02f'),
-                horizontalalignment='right', verticalalignment='center', color=colors.blue_rgb,
+                neg_lefts[i] - (5 / 72) * bbox_to_xscale + dist,
+                neg_inds[i],
+                format_value(neg_widths[i], "%+0.02f"),
+                horizontalalignment="right",
+                verticalalignment="center",
+                color=colors.blue_rgb,
                 fontsize=12,
             )
 
     # draw the y-ticks twice, once in gray and then again with just the feature names in black
     # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
-    ytick_pos = list(range(num_features)) + list(np.arange(num_features)+1e-8)
-    plt.yticks(ytick_pos, yticklabels[:-1] + [label.split('=')[-1] for label in yticklabels[:-1]], fontsize=13)
+    ytick_pos = list(range(num_features)) + list(np.arange(num_features) + 1e-8)
+    plt.yticks(
+        ytick_pos,
+        yticklabels[:-1] + [label.split("=")[-1] for label in yticklabels[:-1]],
+        fontsize=13,
+    )
 
     # put horizontal lines for each feature row
     for i in range(num_features):
         plt.axhline(i, color="#cccccc", lw=0.5, dashes=(1, 5), zorder=-1)
 
     # mark the prior expected value and the model prediction
-    plt.axvline(base_values, 0, 1/num_features, color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
+    plt.axvline(
+        base_values,
+        0,
+        1 / num_features,
+        color="#bbbbbb",
+        linestyle="--",
+        linewidth=0.5,
+        zorder=-1,
+    )
     fx = base_values + values.sum()
     plt.axvline(fx, 0, 1, color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
 
     # clean up the main axis
-    plt.gca().xaxis.set_ticks_position('bottom')
-    plt.gca().yaxis.set_ticks_position('none')
-    plt.gca().spines['right'].set_visible(False)
-    plt.gca().spines['top'].set_visible(False)
-    plt.gca().spines['left'].set_visible(False)
+    plt.gca().xaxis.set_ticks_position("bottom")
+    plt.gca().yaxis.set_ticks_position("none")
+    plt.gca().spines["right"].set_visible(False)
+    plt.gca().spines["top"].set_visible(False)
+    plt.gca().spines["left"].set_visible(False)
     ax.tick_params(labelsize=13)
-    #plt.xlabel("\nModel output", fontsize=12)
+    # plt.xlabel("\nModel output", fontsize=12)
 
     # draw the E[f(X)] tick mark
     xmin, xmax = ax.get_xlim()
     ax2 = ax.twiny()
     ax2.set_xlim(xmin, xmax)
-    ax2.set_xticks([base_values, base_values+1e-8])  # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
-    ax2.set_xticklabels(["\n$E[f(X)]$", "\n$ = "+format_value(base_values, "%0.03f")+"$"], fontsize=12, ha="left")
-    ax2.spines['right'].set_visible(False)
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['left'].set_visible(False)
+    ax2.set_xticks(
+        [base_values, base_values + 1e-8]
+    )  # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
+    ax2.set_xticklabels(
+        ["\n$E[f(X)]$", "\n$ = " + format_value(base_values, "%0.03f") + "$"],
+        fontsize=12,
+        ha="left",
+    )
+    ax2.spines["right"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["left"].set_visible(False)
 
     # draw the f(x) tick mark
     ax3 = ax2.twiny()
     ax3.set_xlim(xmin, xmax)
     # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
     ax3.set_xticks([base_values + values.sum(), base_values + values.sum() + 1e-8])
-    ax3.set_xticklabels(["$f(x)$", "$ = "+format_value(fx, "%0.03f")+"$"], fontsize=12, ha="left")
+    ax3.set_xticklabels(
+        ["$f(x)$", "$ = " + format_value(fx, "%0.03f") + "$"], fontsize=12, ha="left"
+    )
     tick_labels = ax3.xaxis.get_majorticklabels()
-    tick_labels[0].set_transform(tick_labels[0].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(-10/72., 0, fig.dpi_scale_trans))
-    tick_labels[1].set_transform(tick_labels[1].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(12/72., 0, fig.dpi_scale_trans))
+    tick_labels[0].set_transform(
+        tick_labels[0].get_transform()
+        + matplotlib.transforms.ScaledTranslation(-10 / 72.0, 0, fig.dpi_scale_trans)
+    )
+    tick_labels[1].set_transform(
+        tick_labels[1].get_transform()
+        + matplotlib.transforms.ScaledTranslation(12 / 72.0, 0, fig.dpi_scale_trans)
+    )
     tick_labels[1].set_color("#999999")
-    ax3.spines['right'].set_visible(False)
-    ax3.spines['top'].set_visible(False)
-    ax3.spines['left'].set_visible(False)
+    ax3.spines["right"].set_visible(False)
+    ax3.spines["top"].set_visible(False)
+    ax3.spines["left"].set_visible(False)
 
     # adjust the position of the E[f(X)] = x.xx label
     tick_labels = ax2.xaxis.get_majorticklabels()
-    tick_labels[0].set_transform(tick_labels[0].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(-20/72., 0, fig.dpi_scale_trans))
-    tick_labels[1].set_transform(tick_labels[1].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(22/72., -1/72., fig.dpi_scale_trans))
+    tick_labels[0].set_transform(
+        tick_labels[0].get_transform()
+        + matplotlib.transforms.ScaledTranslation(-20 / 72.0, 0, fig.dpi_scale_trans)
+    )
+    tick_labels[1].set_transform(
+        tick_labels[1].get_transform()
+        + matplotlib.transforms.ScaledTranslation(
+            22 / 72.0, -1 / 72.0, fig.dpi_scale_trans
+        )
+    )
 
     tick_labels[1].set_color("#999999")
 
@@ -722,8 +1011,8 @@ def my_waterfall(values,
     if show:
         plt.show()
     else:
-        return plt     
-    
+        return plt
+
 
 def og_waterfall(shap_values, max_display=10, show=True):
     # return
@@ -773,7 +1062,11 @@ def og_waterfall(shap_values, max_display=10, show=True):
 
     base_values = float(shap_values.base_values)
 
-    features = shap_values.display_data if shap_values.display_data is not None else shap_values.data
+    features = (
+        shap_values.display_data
+        if shap_values.display_data is not None
+        else shap_values.data
+    )
 
     feature_names = shap_values.feature_names
     lower_bounds = getattr(shap_values, "lower_bounds", None)
@@ -788,7 +1081,9 @@ def og_waterfall(shap_values, max_display=10, show=True):
 
     # fallback feature names
     if feature_names is None:
-        feature_names = np.array([labels['FEATURE'] % str(i) for i in range(len(values))])
+        feature_names = np.array(
+            [labels["FEATURE"] % str(i) for i in range(len(values))]
+        )
 
     # init variables we use for tracking the plot locations
     num_features = len(values)
@@ -836,15 +1131,27 @@ def og_waterfall(shap_values, max_display=10, show=True):
                 neg_high.append(upper_bounds[order[i]])
             neg_lefts.append(loc)
         if num_individual != num_features or i + 4 < num_individual:
-            plt.plot([loc, loc], [rng[i] - 1 - 0.4, rng[i] + 0.4],
-                     color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
+            plt.plot(
+                [loc, loc],
+                [rng[i] - 1 - 0.4, rng[i] + 0.4],
+                color="#bbbbbb",
+                linestyle="--",
+                linewidth=0.5,
+                zorder=-1,
+            )
         if features is None:
             yticklabels[rng[i]] = feature_names[order[i]]
         else:
             if np.issubdtype(type(features[order[i]]), np.number):
-                yticklabels[rng[i]] = format_value(float(features[order[i]]), "%0.03f") + " = " + feature_names[order[i]]
+                yticklabels[rng[i]] = (
+                    format_value(float(features[order[i]]), "%0.03f")
+                    + " = "
+                    + feature_names[order[i]]
+                )
             else:
-                yticklabels[rng[i]] = str(features[order[i]]) + " = " + str(feature_names[order[i]])
+                yticklabels[rng[i]] = (
+                    str(features[order[i]]) + " = " + str(feature_names[order[i]])
+                )
 
     # add a last grouped feature to represent the impact of all the features we didn't show
     if num_features < len(values):
@@ -859,17 +1166,31 @@ def og_waterfall(shap_values, max_display=10, show=True):
             neg_widths.append(-remaining_impact)
             neg_lefts.append(loc + remaining_impact)
 
-    points = pos_lefts + list(np.array(pos_lefts) + np.array(pos_widths)) + neg_lefts + \
-        list(np.array(neg_lefts) + np.array(neg_widths))
+    points = (
+        pos_lefts
+        + list(np.array(pos_lefts) + np.array(pos_widths))
+        + neg_lefts
+        + list(np.array(neg_lefts) + np.array(neg_widths))
+    )
     dataw = np.max(points) - np.min(points)
 
     # draw invisible bars just for sizing the axes
-    label_padding = np.array([0.1*dataw if w < 1 else 0 for w in pos_widths])
-    plt.barh(pos_inds, np.array(pos_widths) + label_padding + 0.02*dataw,
-             left=np.array(pos_lefts) - 0.01*dataw, color=colors.red_rgb, alpha=0)
-    label_padding = np.array([-0.1*dataw if -w < 1 else 0 for w in neg_widths])
-    plt.barh(neg_inds, np.array(neg_widths) + label_padding - 0.02*dataw,
-             left=np.array(neg_lefts) + 0.01*dataw, color=colors.blue_rgb, alpha=0)
+    label_padding = np.array([0.1 * dataw if w < 1 else 0 for w in pos_widths])
+    plt.barh(
+        pos_inds,
+        np.array(pos_widths) + label_padding + 0.02 * dataw,
+        left=np.array(pos_lefts) - 0.01 * dataw,
+        color=colors.red_rgb,
+        alpha=0,
+    )
+    label_padding = np.array([-0.1 * dataw if -w < 1 else 0 for w in neg_widths])
+    plt.barh(
+        neg_inds,
+        np.array(neg_widths) + label_padding - 0.02 * dataw,
+        left=np.array(neg_lefts) + 0.01 * dataw,
+        color=colors.blue_rgb,
+        alpha=0,
+    )
 
     # define variable we need for plotting the arrows
     head_length = 0.08
@@ -879,7 +1200,7 @@ def og_waterfall(shap_values, max_display=10, show=True):
     ax = plt.gca()
     bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
     width = bbox.width
-    bbox_to_xscale = xlen/width
+    bbox_to_xscale = xlen / width
     hl_scaled = bbox_to_xscale * head_length
     renderer = fig.canvas.get_renderer()
 
@@ -887,22 +1208,33 @@ def og_waterfall(shap_values, max_display=10, show=True):
     for i in range(len(pos_inds)):
         dist = pos_widths[i]
         arrow_obj = plt.arrow(
-            pos_lefts[i], pos_inds[i], max(dist-hl_scaled, 0.000001), 0,
+            pos_lefts[i],
+            pos_inds[i],
+            max(dist - hl_scaled, 0.000001),
+            0,
             head_length=min(dist, hl_scaled),
-            color=colors.red_rgb, width=bar_width,
+            color=colors.red_rgb,
+            width=bar_width,
             head_width=bar_width,
         )
 
         if pos_low is not None and i < len(pos_low):
             plt.errorbar(
-                pos_lefts[i] + pos_widths[i], pos_inds[i],
-                xerr=np.array([[pos_widths[i] - pos_low[i]], [pos_high[i] - pos_widths[i]]]),
+                pos_lefts[i] + pos_widths[i],
+                pos_inds[i],
+                xerr=np.array(
+                    [[pos_widths[i] - pos_low[i]], [pos_high[i] - pos_widths[i]]]
+                ),
                 ecolor=colors.light_red_rgb,
             )
 
         txt_obj = plt.text(
-            pos_lefts[i] + 0.5*dist, pos_inds[i], format_value(pos_widths[i], '%+0.02f'),
-            horizontalalignment='center', verticalalignment='center', color="white",
+            pos_lefts[i] + 0.5 * dist,
+            pos_inds[i],
+            format_value(pos_widths[i], "%+0.02f"),
+            horizontalalignment="center",
+            verticalalignment="center",
+            color="white",
             fontsize=12,
         )
         text_bbox = txt_obj.get_window_extent(renderer=renderer)
@@ -913,8 +1245,12 @@ def og_waterfall(shap_values, max_display=10, show=True):
             txt_obj.remove()
 
             txt_obj = plt.text(
-                pos_lefts[i] + (5/72)*bbox_to_xscale + dist, pos_inds[i], format_value(pos_widths[i], '%+0.02f'),
-                horizontalalignment='left', verticalalignment='center', color=colors.red_rgb,
+                pos_lefts[i] + (5 / 72) * bbox_to_xscale + dist,
+                pos_inds[i],
+                format_value(pos_widths[i], "%+0.02f"),
+                horizontalalignment="left",
+                verticalalignment="center",
+                color=colors.red_rgb,
                 fontsize=12,
             )
 
@@ -923,22 +1259,33 @@ def og_waterfall(shap_values, max_display=10, show=True):
         dist = neg_widths[i]
 
         arrow_obj = plt.arrow(
-            neg_lefts[i], neg_inds[i], -max(-dist-hl_scaled, 0.000001), 0,
+            neg_lefts[i],
+            neg_inds[i],
+            -max(-dist - hl_scaled, 0.000001),
+            0,
             head_length=min(-dist, hl_scaled),
-            color=colors.blue_rgb, width=bar_width,
+            color=colors.blue_rgb,
+            width=bar_width,
             head_width=bar_width,
         )
 
         if neg_low is not None and i < len(neg_low):
             plt.errorbar(
-                neg_lefts[i] + neg_widths[i], neg_inds[i],
-                xerr=np.array([[neg_widths[i] - neg_low[i]], [neg_high[i] - neg_widths[i]]]),
+                neg_lefts[i] + neg_widths[i],
+                neg_inds[i],
+                xerr=np.array(
+                    [[neg_widths[i] - neg_low[i]], [neg_high[i] - neg_widths[i]]]
+                ),
                 ecolor=colors.light_blue_rgb,
             )
 
         txt_obj = plt.text(
-            neg_lefts[i] + 0.5*dist, neg_inds[i], format_value(neg_widths[i], '%+0.02f'),
-            horizontalalignment='center', verticalalignment='center', color="white",
+            neg_lefts[i] + 0.5 * dist,
+            neg_inds[i],
+            format_value(neg_widths[i], "%+0.02f"),
+            horizontalalignment="center",
+            verticalalignment="center",
+            color="white",
             fontsize=12,
         )
         text_bbox = txt_obj.get_window_extent(renderer=renderer)
@@ -949,66 +1296,100 @@ def og_waterfall(shap_values, max_display=10, show=True):
             txt_obj.remove()
 
             txt_obj = plt.text(
-                neg_lefts[i] - (5/72)*bbox_to_xscale + dist, neg_inds[i], format_value(neg_widths[i], '%+0.02f'),
-                horizontalalignment='right', verticalalignment='center', color=colors.blue_rgb,
+                neg_lefts[i] - (5 / 72) * bbox_to_xscale + dist,
+                neg_inds[i],
+                format_value(neg_widths[i], "%+0.02f"),
+                horizontalalignment="right",
+                verticalalignment="center",
+                color=colors.blue_rgb,
                 fontsize=12,
             )
 
     # draw the y-ticks twice, once in gray and then again with just the feature names in black
     # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
-    ytick_pos = list(range(num_features)) + list(np.arange(num_features)+1e-8)
-    plt.yticks(ytick_pos, yticklabels[:-1] + [label.split('=')[-1] for label in yticklabels[:-1]], fontsize=13)
+    ytick_pos = list(range(num_features)) + list(np.arange(num_features) + 1e-8)
+    plt.yticks(
+        ytick_pos,
+        yticklabels[:-1] + [label.split("=")[-1] for label in yticklabels[:-1]],
+        fontsize=13,
+    )
 
     # put horizontal lines for each feature row
     for i in range(num_features):
         plt.axhline(i, color="#cccccc", lw=0.5, dashes=(1, 5), zorder=-1)
 
     # mark the prior expected value and the model prediction
-    plt.axvline(base_values, 0, 1/num_features, color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
+    plt.axvline(
+        base_values,
+        0,
+        1 / num_features,
+        color="#bbbbbb",
+        linestyle="--",
+        linewidth=0.5,
+        zorder=-1,
+    )
     fx = base_values + values.sum()
     plt.axvline(fx, 0, 1, color="#bbbbbb", linestyle="--", linewidth=0.5, zorder=-1)
 
     # clean up the main axis
-    plt.gca().xaxis.set_ticks_position('bottom')
-    plt.gca().yaxis.set_ticks_position('none')
-    plt.gca().spines['right'].set_visible(False)
-    plt.gca().spines['top'].set_visible(False)
-    plt.gca().spines['left'].set_visible(False)
+    plt.gca().xaxis.set_ticks_position("bottom")
+    plt.gca().yaxis.set_ticks_position("none")
+    plt.gca().spines["right"].set_visible(False)
+    plt.gca().spines["top"].set_visible(False)
+    plt.gca().spines["left"].set_visible(False)
     ax.tick_params(labelsize=13)
-    #plt.xlabel("\nModel output", fontsize=12)
+    # plt.xlabel("\nModel output", fontsize=12)
 
     # draw the E[f(X)] tick mark
     xmin, xmax = ax.get_xlim()
     ax2 = ax.twiny()
     ax2.set_xlim(xmin, xmax)
-    ax2.set_xticks([base_values, base_values+1e-8])  # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
-    ax2.set_xticklabels(["\n$E[f(X)]$", "\n$ = "+format_value(base_values, "%0.03f")+"$"], fontsize=12, ha="left")
-    ax2.spines['right'].set_visible(False)
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['left'].set_visible(False)
+    ax2.set_xticks(
+        [base_values, base_values + 1e-8]
+    )  # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
+    ax2.set_xticklabels(
+        ["\n$E[f(X)]$", "\n$ = " + format_value(base_values, "%0.03f") + "$"],
+        fontsize=12,
+        ha="left",
+    )
+    ax2.spines["right"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["left"].set_visible(False)
 
     # draw the f(x) tick mark
     ax3 = ax2.twiny()
     ax3.set_xlim(xmin, xmax)
     # The 1e-8 is so matplotlib 3.3 doesn't try and collapse the ticks
     ax3.set_xticks([base_values + values.sum(), base_values + values.sum() + 1e-8])
-    ax3.set_xticklabels(["$f(x)$", "$ = "+format_value(fx, "%0.03f")+"$"], fontsize=12, ha="left")
+    ax3.set_xticklabels(
+        ["$f(x)$", "$ = " + format_value(fx, "%0.03f") + "$"], fontsize=12, ha="left"
+    )
     tick_labels = ax3.xaxis.get_majorticklabels()
-    tick_labels[0].set_transform(tick_labels[0].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(-10/72., 0, fig.dpi_scale_trans))
-    tick_labels[1].set_transform(tick_labels[1].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(12/72., 0, fig.dpi_scale_trans))
+    tick_labels[0].set_transform(
+        tick_labels[0].get_transform()
+        + matplotlib.transforms.ScaledTranslation(-10 / 72.0, 0, fig.dpi_scale_trans)
+    )
+    tick_labels[1].set_transform(
+        tick_labels[1].get_transform()
+        + matplotlib.transforms.ScaledTranslation(12 / 72.0, 0, fig.dpi_scale_trans)
+    )
     tick_labels[1].set_color("#999999")
-    ax3.spines['right'].set_visible(False)
-    ax3.spines['top'].set_visible(False)
-    ax3.spines['left'].set_visible(False)
+    ax3.spines["right"].set_visible(False)
+    ax3.spines["top"].set_visible(False)
+    ax3.spines["left"].set_visible(False)
 
     # adjust the position of the E[f(X)] = x.xx label
     tick_labels = ax2.xaxis.get_majorticklabels()
-    tick_labels[0].set_transform(tick_labels[0].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(-20/72., 0, fig.dpi_scale_trans))
-    tick_labels[1].set_transform(tick_labels[1].get_transform(
-    ) + matplotlib.transforms.ScaledTranslation(22/72., -1/72., fig.dpi_scale_trans))
+    tick_labels[0].set_transform(
+        tick_labels[0].get_transform()
+        + matplotlib.transforms.ScaledTranslation(-20 / 72.0, 0, fig.dpi_scale_trans)
+    )
+    tick_labels[1].set_transform(
+        tick_labels[1].get_transform()
+        + matplotlib.transforms.ScaledTranslation(
+            22 / 72.0, -1 / 72.0, fig.dpi_scale_trans
+        )
+    )
 
     tick_labels[1].set_color("#999999")
 
@@ -1022,14 +1403,13 @@ def og_waterfall(shap_values, max_display=10, show=True):
         plt.show()
     else:
         return plt.gca()
-    
 
 
 def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
     """
     Perform Silhouette analysis for a range of k values and visualize the results.
     """
-    df= pca_data(df, 3)
+    df = pca_data(df, 3)
     # Set the size of the figure
     plt.figure(figsize=figsize)
 
@@ -1040,13 +1420,15 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
     _ = plt.subplot(grid[0, :])
 
     # First plot: Silhouette scores for different k values
-    sns.set_palette(['darkorange'])
+    sns.set_palette(["darkorange"])
 
     silhouette_scores = []
 
     # Iterate through the range of k values
     for k in range(start_k, stop_k + 1):
-        km = KMeans(n_clusters=k, init='k-means++', n_init=10, max_iter=100, random_state=0)
+        km = KMeans(
+            n_clusters=k, init="k-means++", n_init=10, max_iter=100, random_state=0
+        )
         km.fit(df)
         labels = km.predict(df)
         score = silhouette_score(df, labels)
@@ -1054,23 +1436,31 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
 
     best_k = start_k + silhouette_scores.index(max(silhouette_scores))
 
-    plt.plot(range(start_k, stop_k + 1), silhouette_scores, marker='o')
+    plt.plot(range(start_k, stop_k + 1), silhouette_scores, marker="o")
     plt.xticks(range(start_k, stop_k + 1))
-    plt.xlabel('Number of clusters (k)')
-    plt.ylabel('Silhouette score')
-    plt.title('Average Silhouette Score for Different k Values', fontsize=15)
+    plt.xlabel("Number of clusters (k)")
+    plt.ylabel("Silhouette score")
+    plt.title("Average Silhouette Score for Different k Values", fontsize=15)
 
     # Add the optimal k value text to the plot
-    optimal_k_text = f'The k value with the highest Silhouette score is: {best_k}'
-    plt.text(10, 0.23, optimal_k_text, fontsize=12, verticalalignment='bottom', 
-             horizontalalignment='left', bbox=dict(facecolor='#fcc36d', edgecolor='#ff6200', boxstyle='round, pad=0.5'))
-             
+    optimal_k_text = f"The k value with the highest Silhouette score is: {best_k}"
+    plt.text(
+        10,
+        0.23,
+        optimal_k_text,
+        fontsize=12,
+        verticalalignment="bottom",
+        horizontalalignment="left",
+        bbox=dict(facecolor="#fcc36d", edgecolor="#ff6200", boxstyle="round, pad=0.5"),
+    )
 
     # Second plot (subplot): Silhouette plots for each k value
     colors = sns.color_palette("bright")
 
-    for i in range(start_k, stop_k + 1):    
-        km = KMeans(n_clusters=i, init='k-means++', n_init=10, max_iter=100, random_state=0)
+    for i in range(start_k, stop_k + 1):
+        km = KMeans(
+            n_clusters=i, init="k-means++", n_init=10, max_iter=100, random_state=0
+        )
         row_idx, col_idx = divmod(i - start_k, 2)
 
         # Assign the plots to the second, third, and fourth rows
@@ -1081,10 +1471,17 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
 
         # Add the Silhouette score text to the plot
         score = silhouette_score(df, km.labels_)
-        ax.text(0.97, 0.02, f'Silhouette Score: {score:.2f}', fontsize=12, \
-                ha='right', transform=ax.transAxes, color='red')
+        ax.text(
+            0.97,
+            0.02,
+            f"Silhouette Score: {score:.2f}",
+            fontsize=12,
+            ha="right",
+            transform=ax.transAxes,
+            color="red",
+        )
 
-        ax.set_title(f'Silhouette Plot for {i} Clusters', fontsize=15)
+        ax.set_title(f"Silhouette Plot for {i} Clusters", fontsize=15)
 
     plt.tight_layout()
-    return plt
+    return plt, best_k

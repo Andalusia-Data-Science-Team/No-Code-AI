@@ -1,7 +1,16 @@
 from abc import ABC, abstractmethod
 import warnings
+from collections import Counter
 
-from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransformer
+from .utils import (
+    SkewnessTransformer,
+    silhouette_analysis,
+    PCADataFrameTransformer,
+    pca_data,
+    cluster_dist,
+    cluster_eval,
+    cluster_analysis,
+)
 from .model_utils import grid_dict
 
 import pickle
@@ -9,21 +18,42 @@ import pandas as pd, numpy as np
 
 from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler, PolynomialFeatures, MinMaxScaler
+from sklearn.preprocessing import (
+    LabelEncoder,
+    OneHotEncoder,
+    StandardScaler,
+    PolynomialFeatures,
+    MinMaxScaler,
+)
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error, r2_score, silhouette_score
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    mean_squared_error,
+    r2_score,
+)
 
-from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
+from sklearn.linear_model import (
+    LogisticRegression,
+    LinearRegression,
+    ElasticNet,
+    Lasso,
+    Ridge,
+)
 from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor, XGBClassifier
 from tqdm import tqdm
 
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    ExtraTreesClassifier,
+    GradientBoostingClassifier,
+)
 from sklearn.svm import SVC, SVR
-from sklearn.ensemble import AdaBoostClassifier 
+from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.cluster import KMeans, DBSCAN
@@ -34,25 +64,43 @@ from sklearn.model_selection import KFold
 from .ts_models import ProphetModel
 
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 # prophet_kw= {'date_col': None,
 #              'target_col': None}
 
-models_dict= {'SVC': SVC(probability= True), 'LR': LogisticRegression(), 'Linear Regression': LinearRegression(),
-              'ElasticNet': ElasticNet(), 'KNN_cls': KNeighborsClassifier(), 'KNN_reg': KNeighborsRegressor(),
-              'RF_cls': RandomForestClassifier(), 'XGB_cls': XGBClassifier(), 'XGB_reg': XGBRegressor(),
-              'Ridge': Ridge(), 'Lasso': Lasso(), 'extra_tree': ExtraTreesClassifier(), 'SVR': SVR(),
-              'GradientBoosting_cls': GradientBoostingClassifier(), 'Adaboost': AdaBoostClassifier(),
-              'DecisionTree_cls': DecisionTreeClassifier(), 'kmeans': KMeans(), 'dbscan': DBSCAN()}
+models_dict = {
+    "SVC": SVC(probability=True),
+    "LR": LogisticRegression(),
+    "Linear Regression": LinearRegression(),
+    "ElasticNet": ElasticNet(),
+    "KNN_cls": KNeighborsClassifier(),
+    "KNN_reg": KNeighborsRegressor(),
+    "RF_cls": RandomForestClassifier(),
+    "XGB_cls": XGBClassifier(),
+    "XGB_reg": XGBRegressor(),
+    "Ridge": Ridge(),
+    "Lasso": Lasso(),
+    "extra_tree": ExtraTreesClassifier(),
+    "SVR": SVR(),
+    "GradientBoosting_cls": GradientBoostingClassifier(),
+    "Adaboost": AdaBoostClassifier(),
+    "DecisionTree_cls": DecisionTreeClassifier(),
+    "kmeans": KMeans(),
+    "dbscan": DBSCAN(),
+}
 
-normilizers= {'standard': StandardScaler(), 'min-max': MinMaxScaler(feature_range = (0, 1))}
+normilizers = {
+    "standard": StandardScaler(),
+    "min-max": MinMaxScaler(feature_range=(0, 1)),
+}
 
 
 class BaseModel(ABC):
     def __init__(self, algorithm, grid=False):
         self.pipeline = None
-        self.algorithm= algorithm
-        self.grid= grid
+        self.algorithm = algorithm
+        self.grid = grid
 
     @abstractmethod
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
@@ -62,7 +110,9 @@ class BaseModel(ABC):
     def ensure_pipeline_built(self):
         """Ensure the pipeline has been built by checking if self.pipeline is set."""
         if self.pipeline is None:
-            raise ValueError("The pipeline has not been built. Ensure `build_pipeline` sets self.pipeline.")
+            raise ValueError(
+                "The pipeline has not been built. Ensure `build_pipeline` sets self.pipeline."
+            )
 
     def fit(self, X, y):
         self.ensure_pipeline_built()
@@ -84,17 +134,21 @@ class KFoldModel(BaseEstimator, TransformerMixin):
         self.best_estimators_ = []
 
     def fit(self, X, y):
-        self.cv = KFold(n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state)
+        self.cv = KFold(
+            n_splits=self.n_splits, shuffle=self.shuffle, random_state=self.random_state
+        )
         self.scores_ = []
         self.best_estimators_ = []
 
-        for train_index, val_index in tqdm(self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"):
+        for train_index, val_index in tqdm(
+            self.cv.split(X), total=self.n_splits, desc="K-Fold Progress"
+        ):
             X_train, X_val = X[train_index], X[val_index]
             y_train, y_val = y[train_index], y[val_index]
-            
+
             self.model.fit(X_train, y_train)
             self.best_estimators_.append(self.model.best_estimator_)
-            
+
             score = accuracy_score(y_val, self.model.predict(X_val))
             self.scores_.append(score)
 
@@ -102,7 +156,6 @@ class KFoldModel(BaseEstimator, TransformerMixin):
 
     def predict(self, X):
         return self.best_estimators_[-1].predict(X)
-
 
 
 class GridSearchModel(BaseEstimator, TransformerMixin):
@@ -113,16 +166,18 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
         self.best_estimator_ = None
 
     def fit(self, X, y=None):
-        self.grid_search = GridSearchCV(estimator=self.alg, param_grid=self.grid_params, cv=3)
+        self.grid_search = GridSearchCV(
+            estimator=self.alg, param_grid=self.grid_params, cv=3
+        )
         self.grid_search.fit(X, y)
-        print('grid search applied')
+        print("grid search applied")
 
         self.best_estimator_ = self.grid_search.best_estimator_
         return self
-    
+
     def transform(self, X):
         return X
-    
+
     def predict(self, X):
         return self.best_estimator_.predict(X)
 
@@ -131,33 +186,38 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
 
 
 class Model:
-    def __init__(self, algorithm, grid=False, model_kws= {}):
+    def __init__(self, cfg):
         """
         Initialize the model with an algorithm and optional grid search.
 
         Parameters:
-        algorithm (sklearn-compatible algorithm)
-        grid (bool): Whether to apply grid search. Default is False.
+        cfg (Dict): configuration dictionary
         """
         self.pipeline = None
         self.model = None
+        self.cfg = cfg
         self.label_encoder = LabelEncoder()
-        if grid == True and len(model_kws) != 0:
-            warnings.warn("Can't use grid search with predefined model kwargs, setting kwargs to None...")
-            model_kws= None
+        algorithm = cfg["alg"]
+        self.model_kws = cfg["model_kw"]
 
         if algorithm in models_dict.keys():
             self.algorithm = models_dict[algorithm]
         else:
             raise NotImplementedError
-        
-        if model_kws is not None:
-            self.algorithm.set_params(**model_kws)
-        
-        self.grid = grid
 
-        if grid:
-            self.grid_model = GridSearchModel(alg= self.algorithm, grid_params= grid_dict[algorithm])
+        if cfg["apply_GridSearch"] == True and len(self.model_kws) != 0:
+            warnings.warn(
+                "Can't use grid search with predefined model kwargs, setting kwargs to None..."
+            )
+            self.model_kws = None
+            self.grid_model = GridSearchModel(
+                alg=self.algorithm, grid_params=grid_dict[algorithm]
+            )
+
+        if self.model_kws is not None:
+            self.algorithm.set_params(**self.model_kws)
+
+        self.grid = cfg["apply_GridSearch"]
 
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
         """
@@ -168,50 +228,68 @@ class Model:
         poly_feat (bool): Whether to apply polynomial feature generation.
         skew_fix (bool): Whether to apply skewness correction.
         """
-        categorical_features = X.select_dtypes('object').columns.tolist()
-        numerical_features = X.select_dtypes('number').columns.tolist() 
+        categorical_features = X.select_dtypes("object").columns.tolist()
+        numerical_features = X.select_dtypes("number").columns.tolist()
 
-        categorical_transformer = Pipeline(steps=[
-            ('cat_imp', SimpleImputer(missing_values=np.nan, strategy="most_frequent")),
-            ('one_hot_encoder', OneHotEncoder(handle_unknown='ignore'))
-        ])
+        categorical_transformer = Pipeline(
+            steps=[
+                (
+                    "cat_imp",
+                    SimpleImputer(missing_values=np.nan, strategy="most_frequent"),
+                ),
+                ("one_hot_encoder", OneHotEncoder(handle_unknown="ignore")),
+            ]
+        )
 
-        numerical_transformer = Pipeline(steps=[
-            ('num_imp', SimpleImputer(missing_values=np.nan, strategy="mean"))
-            ])
+        numerical_transformer = Pipeline(
+            steps=[("num_imp", SimpleImputer(missing_values=np.nan, strategy="mean"))]
+        )
 
         if not isinstance(self.algorithm, KMeans):
-            numerical_transformer.steps.append(('scaler', MinMaxScaler(feature_range=(0, 1))))  # Only scale if not KMeans
-
+            numerical_transformer.steps.append(
+                ("scaler", MinMaxScaler(feature_range=(0, 1)))
+            )  # Only scale if not KMeans
 
         if skew_fix:
-            numerical_transformer.steps = [step for step in numerical_transformer.steps if step[0] != "num_imp"]
-            numerical_transformer.steps.append(('skew_fix', SkewnessTransformer(skew_limit=0.75))),
-            numerical_transformer.steps.append(('num_imp', SimpleImputer(missing_values=np.nan, strategy="mean")))
+            numerical_transformer.steps = [
+                step for step in numerical_transformer.steps if step[0] != "num_imp"
+            ]
+            numerical_transformer.steps.append(
+                ("skew_fix", SkewnessTransformer(skew_limit=0.75))
+            ),
+            numerical_transformer.steps.append(
+                ("num_imp", SimpleImputer(missing_values=np.nan, strategy="mean"))
+            )
 
         if poly_feat:
-            numerical_transformer.steps.append(('Polynomial_Features', PolynomialFeatures(degree=2)))
-            print('poly features applied')
+            numerical_transformer.steps.append(
+                ("Polynomial_Features", PolynomialFeatures(degree=2))
+            )
+            print("poly features applied")
 
         if isinstance(self.algorithm, KMeans):
-            numerical_transformer.steps.append(('to_dataframe', PCADataFrameTransformer()))
+            if self.model_kws["n_clusters"] == -1:
+                _X = self.preprocess(X)
+                self.plot, best_k = silhouette_analysis(_X, 2, 15)
+                self.algorithm.set_params({"n_clusters": best_k})
+            numerical_transformer.steps.append(
+                ("to_dataframe", PCADataFrameTransformer())
+            )
 
-
-        preprocessor = ColumnTransformer(transformers=[
-            ('categorical', categorical_transformer, categorical_features),
-            ('numerical', numerical_transformer, numerical_features)
-        ])
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("categorical", categorical_transformer, categorical_features),
+                ("numerical", numerical_transformer, numerical_features),
+            ]
+        )
 
         if self.grid:
-            model_step = ('model', self.grid_model)
-            
-        else:
-            model_step = ('model', self.algorithm)
+            model_step = ("model", self.grid_model)
 
-        steps= [
-            ('preprocessor', preprocessor),
-            model_step
-        ]
+        else:
+            model_step = ("model", self.algorithm)
+
+        steps = [("preprocessor", preprocessor), model_step]
 
         self.pipeline = Pipeline(steps=steps)
 
@@ -229,7 +307,7 @@ class Model:
 
         return d, self.label_encoder.transform(y)
 
-    def train(self, X: pd.DataFrame, y: pd.Series= None, skew= False, poly= False):
+    def train(self, X: pd.DataFrame, y: pd.Series = None, skew=False, poly=False):
         """
         Train the model.
 
@@ -239,12 +317,15 @@ class Model:
         skew (bool): Apply skewness correction.
         poly (bool): Apply polynomial features.
         """
+        if self.cfg["pca"]:
+            X = pca_data(X, self.cfg["pca_comp"])
+            self.pca_data = X.copy()
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
-        if y is not None and y.dtypes == 'object':
+        if y is not None and y.dtypes == "object":
             y = self.label_encoder.fit_transform(y)
 
         self.pipeline.fit(X, y)
-        self.model = self.pipeline.named_steps['model']
+        self.model = self.pipeline.named_steps["model"]
 
     def preprocess(self, X):
         """
@@ -253,7 +334,7 @@ class Model:
         Parameters:
         X (pd.DataFrame): The input data to preprocess.
         """
-        return self.pipeline.named_steps['preprocessor'].transform(X)
+        return self.pipeline.named_steps["preprocessor"].transform(X)
 
     def predict(self, X):
         """
@@ -261,24 +342,24 @@ class Model:
 
         Parameters:
         X (pd.DataFrame): The input data.
-        
+
         Returns:
         array-like: Predicted clusters or labels.
         """
         X = self.preprocess(X)
         return self.model.predict(X)
-    
+
     def predict_prob(self, X):
         """
         Predict probabilities for the input data (for models supporting probabilities).
 
         Parameters:
         X (pd.DataFrame): The input data.
-        
+
         Returns:
         array-like: Predicted probabilities.
         """
-        X= self.preprocess(X)
+        X = self.preprocess(X)
         return self.model.predict_proba(X)
 
     def cls_metrics(self, X: pd.DataFrame, y_true: pd.Series):
@@ -288,19 +369,19 @@ class Model:
         Parameters:
         X (pd.DataFrame): Input features.
         y_true (pd.Series): True labels.
-        
+
         Returns:
         tuple: Confusion matrix and accuracy score.
         """
         y_pred = self.predict(X)
-        if y_true.dtypes == 'object':
+        if y_true.dtypes == "object":
             y_pred = self.label_encoder.inverse_transform(y_pred)
 
         cm = confusion_matrix(y_true, y_pred)
         accuracy = accuracy_score(y_true, y_pred)
 
         return cm, accuracy
-    
+
     def reg_metrics(self, X, y_true):
         """
         Compute regression metrics (MSE and R2 score).
@@ -308,7 +389,7 @@ class Model:
         Parameters:
         X (pd.DataFrame): Input features.
         y_true (pd.Series): True target values.
-        
+
         Returns:
         tuple: Mean squared error and R2 score.
         """
@@ -318,11 +399,34 @@ class Model:
         r2 = r2_score(y_true, y_pred)
 
         return mse, r2
-    
+
+    def process_cluster(self, X):
+        self.model: KMeans
+        cluster_frequencies = Counter(self.model.labels_)
+
+        label_mapping = {
+            label: new_label
+            for new_label, (label, _) in enumerate(cluster_frequencies.most_common())
+        }
+
+        new_labels = np.array([label_mapping[label] for label in self.model.labels_])
+        # X= self.preprocess(X)
+        # X= pd.DataFrame(X.toarray())
+        X["cluster"] = new_labels
+        self.pca_data["cluster"] = new_labels
+        return X, self.pca_data
+
     def cluster_metrics(self, X):
-        X= self.preprocess(X)
-        return silhouette_analysis(X, 2, 15)
-    
+        outs = {}
+        og_data, pca_data_proc = self.process_cluster(X)
+        if self.model_kws["n_clusters"] == -1:
+            outs["silhouette_analysis"] = self.plot
+
+        outs["cluster_dist"] = cluster_dist(pca_data_proc)
+        outs["cluster_eval"] = cluster_eval(pca_data_proc)
+        outs["cluster_analysis"] = cluster_analysis(og_data)
+
+        return outs
 
     def save_model(self, file_path):
         """
@@ -331,61 +435,63 @@ class Model:
         Parameters:
         file_path (str): Path to save the model.
         """
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             pickle.dump(self, f)
         print(f"Model saved successfully as: {file_path}")
 
 
-def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
+def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
     # global prophet_kw
-    if cfg['task_type'] == 'Time':
-        prophet_kw= cfg['ts_config']
+    if cfg["task_type"] == "Time":
+        prophet_kw = cfg["ts_config"]
         print("Setting Prophet args")
-        pf= ProphetModel(**prophet_kw)
+        pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
         return pf
 
-    _model= Model(cfg['alg'], cfg['apply_GridSearch'], model_kws= cfg['model_kw'])
-    _model.train(X_train, y_train, cfg['skew_fix'], cfg['poly_feat'])
-    if cfg['save']:
-        _model.save_model('model.pkl')
+    _model = Model(cfg)
+    _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
+    if cfg["save"]:
+        _model.save_model("model.pkl")
 
-    if cfg['task_type'] == "Classification":
+    if cfg["task_type"] == "Classification":
         # p= _model.predict_prob(X_test)
-        cm, acc= _model.cls_metrics(X_test, y_test)
+        cm, acc = _model.cls_metrics(X_test, y_test)
         return acc, cm
 
-    elif cfg['task_type'] == "Regression":
-        mse, r2= _model.reg_metrics(X_test, y_test)
+    elif cfg["task_type"] == "Regression":
+        mse, r2 = _model.reg_metrics(X_test, y_test)
         return mse, r2
-    
+
     else:
         return _model.cluster_metrics(X_train)
 
-def inference(X, proba= False):
+
+def inference(X, proba=False):
     try:
         _model: Model
-        with open('model.pkl', 'rb') as f:
-            _model= pickle.load(f)
+        with open("model.pkl", "rb") as f:
+            _model = pickle.load(f)
 
         if proba:
             return _model.predict_prob(X)
-        
-        return _model.pipeline.predict(X)
+
+        return _model.predict(X)
     except FileNotFoundError:
         print("Model file not found.")
 
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
 
-def get_corresponding_labels(y, encode= False):
+
+def get_corresponding_labels(y, encode=False):
     try:
-        with open('model.pkl', 'rb') as f:
-            _model= pickle.load(f)
-        
+        with open("model.pkl", "rb") as f:
+            _model = pickle.load(f)
+
         if encode:
-            return _model.encode_label([y]) 
-        
+            return _model.encode_label([y])
+
         return _model.reverse_label([y])
     except FileNotFoundError:
         print("Model file not found.")
