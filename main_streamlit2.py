@@ -151,6 +151,7 @@ if uploaded_file:
     # Data Preprocessing
     st.markdown("### Step 3: Data Preprocessing")
     cfg = {'save': True}  # for inference stability it's fixed
+    cfg['model_kw'] = dict()
 
     with st.expander(" :broom: Handle Missing Data"):
         cfg["clean"] = st.selectbox(
@@ -221,7 +222,7 @@ if uploaded_file:
 
     validation_size = st.slider("📊 Select Validation Size (%) : recommended value: 20% ", min_value=1, max_value=100,
                                 value=20)
-    task_type = st.radio("⚙️ Select Task Type", ["Classification", "Regression", "Time"], index=0,
+    task_type = st.radio("⚙️ Select Task Type", ["Classification", "Regression","Cluster", "Time"], index=0,
                          help="Select the task type")
 
     model_mapping = {
@@ -302,6 +303,23 @@ if uploaded_file:
             st.image("static/imgs/regression.png",
                  caption="Example: Linear Regression", use_container_width=False, )
 
+    elif task_type == "Cluster":
+        st.markdown("#### Clustering: 🌀")
+        col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
+        with col1:
+            st.write("""
+            **Use Case**: Identify groups or clusters of similar data points without predefined labels.
+
+            **Examples**:
+            - Segmenting customers based on purchase behaviors.
+            - Grouping similar products based on features.
+            - Detecting anomalies by identifying clusters of unexpected data points.
+
+            **Models**: K-Means, DBSCAN
+            """)
+        with col2:
+            st.image("static/imgs/clustering.png",
+                     caption="Example: Clustering Analysis", use_container_width=False)
     elif task_type == "Time":
         st.markdown("#### Time Series: ⏳")
         col1, col2 = st.columns([2, 1])  # Adjust the column width ratio as needed
@@ -380,12 +398,29 @@ if uploaded_file:
 
 
         if cfg['alg'] == 'Prophet':
+            #adhust frequency options to be selected by the user
+            freq_options = {
+                'Minutes': 'T',
+                'Hours': 'H',
+                'Days': 'D',
+                'Weeks': 'W',
+                'Months': 'M'
+            }
+
+
             ts_kw['date_col'] = st.selectbox('Select The Date Column', DF.columns)
             ts_kw['target_col'] = target
             ts_kw['prophet_params'] = {}
             ts_kw['selected_cols'] = {}
-            ts_kw['freq'] = '1min'
-            ts_kw['f_period'] = 5
+            # Create a select box to choose frequency
+            selected_freq_label = st.selectbox("Select forecast frequency:", options=freq_options.keys())
+            selected_freq = freq_options[selected_freq_label]  # Get corresponding frequency value
+            num_of_points = st.number_input(
+                "Select how many points to forecast",step=1
+
+            )
+            ts_kw['freq'] = selected_freq
+            ts_kw['f_period'] = int(num_of_points)
             cfg['ts_config'] = ts_kw
 
         # cfg['skew_fix'] = st.checkbox('Skew Fix')
@@ -399,7 +434,7 @@ if uploaded_file:
     if st.button("🚀 Train Model"):
         if task_type == "Classification":
             st.write("Perform classification task with option:")
-            X_train, X_test, y_train, y_test = utils.process_data(DF, cfg, target, task_type)
+            X_train, X_test, y_train, y_test = utils.process_data(DF, cfg, target, task_type,validation_size)
             report = model(X_train, X_test, y_train, y_test, cfg)
             st.write("Accuracy:")
             st.write(report[0])
@@ -408,7 +443,7 @@ if uploaded_file:
 
         elif task_type == "Regression":
             st.write("Perform Regression task with option:")
-            X_train, X_test, y_train, y_test = utils.process_data(DF, cfg, target, task_type)
+            X_train, X_test, y_train, y_test = utils.process_data(DF, cfg, target, task_type,validation_size)
             report = model(X_train, X_test, y_train, y_test, cfg)
             st.write("MSE:")
             st.write(report[0])
@@ -417,7 +452,7 @@ if uploaded_file:
 
         elif task_type == "Time":
             st.write("Performing Time Series Analysis")
-            ts_df = utils.process_data(DF, cfg, target, task_type, all=True)
+            ts_df = utils.process_data(DF, cfg, target, task_type,validation_size, all=True)
             pf = model(ts_df, cfg=cfg)
             # st.plotly_chart(pf.slide_display())
             # st.pyplot(pf.plot_forcast())
@@ -428,17 +463,22 @@ if uploaded_file:
             #     width=600,  # Adjust width
             #     height=300  # Adjust height
             # )
-            st.plotly_chart(plotly_fig, use_container_width=False)
+            st.plotly_chart(plotly_fig, use_container_width=True)
 
             # Constrain Matplotlib Forecast Plot
             forecast_fig = pf.plot_forcast()
-            # forecast_fig.set_size_inches(10, 3)  # Adjust size
-            st.pyplot(forecast_fig)
+
+
+
+            forecast_fig.set_size_inches(10, 3)  # Adjust size
+            st.plotly_chart(forecast_fig,use_container_width=True,)
+
+
 
             # Constrain Matplotlib Component Plot
-            component_fig = pf.plot_component()
+            #component_fig = pf.plot_component()
             # component_fig.set_size_inches(10, 3)  # Adjust size
-            st.pyplot(component_fig)
+            #st.pyplot(component_fig)
 
     if task_type != "Time":
 
@@ -484,94 +524,90 @@ if uploaded_file:
                 classes = None
                 st.warning("Unable to define classes automatically. Check your data or model.")
 
-        # Run Inference Button
-        if st.button("🚀 Run Inference"):
-            try:
-                if task_type == "Classification":
-                    preds = inference(inf_df, True)
-                    st.markdown("#### 📊 Model Prediction Results")
-                    if classes:
-                        fig = go.Figure(data=[
-                            go.Pie(values=preds[0], labels=list(classes.keys()), hole=0.4)
-                        ])
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.write("Class Probabilities:")
-                        st.write({k: v for k, v in zip(classes.keys(), preds[0])})
-                    else:
-                        st.error("Class labels are missing. Unable to display probabilities.")
-
-                elif task_type == "Regression":
-                    preds = max(inference(inf_df), 1)
-
-                    st.markdown("#### 📊 Predicted Output")
-                    st.write(f"**Prediction:** for {target} {preds}")
-                    st.markdown("""
-                       **📝 Note**: Regression models predict continuous numeric values, 
-                       which can range over an interval rather than being limited to discrete categories.
-                       """)
-
-                elif task_type == "Time":
-                    st.markdown("#### Time Series Prediction")
-                    ts_results = model(inf_df, cfg)
-                    st.write("Forecast Results:")
-                    st.write(ts_results)
-
-            except Exception as e:
-                st.error(f"An error occurred during inference: {e}")
-
-    # Upload testing data
-    # Add functionality to upload test data
-    st.subheader("🔍 Upload Test Data and Predict")
-    st.write("""
-    Upload your test dataset to generate predictions using the selected model. Ensure the test dataset has the same structure (columns) as the training data.
-    """)
-
-    # File uploader for test data
-    test_data_file = st.file_uploader("Upload Test Data (CSV, Excel, or Pickle)", type=["csv", "xls", "xlsx", "pkl"],
-                                      key="test_data_uploader")
-
-    if test_data_file:
-        # Handle file upload
-        file_extension = test_data_file.name.split(".")[-1]
+    # Run Inference Button
+    if st.button("🚀 Run Inference"):
         try:
-            if file_extension == "csv":
-                test_df = pd.read_csv(test_data_file)
-            elif file_extension in ["xls", "xlsx"]:
-                test_df = pd.read_excel(test_data_file)
-            elif file_extension == "pkl":
-                test_df = pickle.load(test_data_file)
-            else:
-                st.error("❌ Unsupported file type. Please upload a CSV, Excel, or Pickle file.")
-                st.stop()
+            if task_type == "Classification":
+                preds = inference(inf_df, True)
+                st.markdown("#### 📊 Model Prediction Results")
+                if classes:
+                    fig = go.Figure(data=[
+                        go.Pie(values=preds[0], labels=list(classes.keys()), hole=0.4)
+                    ])
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.write("Class Probabilities:")
+                    st.write({k: v for k, v in zip(classes.keys(), preds[0])})
+                else:
+                    st.error("Class labels are missing. Unable to display probabilities.")
 
-            # Validate test data structure
-            if set(test_df.columns) != set(DF.columns) - {target}:
-                st.error("❌ The columns in the test data must match the training data (excluding the target column).")
-            else:
-                st.success("✅ Test data uploaded successfully!")
-                st.write("Here is a preview of your test data:")
-                st.dataframe(test_df.head())
+            elif task_type == "Regression":
+                preds = max(inference(inf_df), 1)
 
-                # Run predictions
-                if st.button("🚀 Run Predictions"):
-                    X_test = test_df.copy()  # Ensure the test data does not include the target column
-                    predictions = inference(X_test)  # Replace this with your prediction function
+                st.markdown("#### 📊 Predicted Output")
+                st.write(f"**Prediction:** for {target} {preds}")
+                st.markdown("""
+                   **📝 Note**: Regression models predict continuous numeric values, 
+                   which can range over an interval rather than being limited to discrete categories.
+                   """)
 
-                    test_df['Predictions'] = predictions  # Append predictions to the test data
-                    test_df['Predictions'] = test_df['Predictions'].apply(lambda x: max(x, 1))
-                    st.success("✅ Predictions generated successfully!")
-                    st.write("Here is the test data with predictions:")
-                    st.dataframe(test_df)
 
-                    # Download predictions
-                    st.markdown("### 📥 Download Predictions")
-                    csv = test_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="Download Predictions as CSV",
-                        data=csv,
-                        file_name="predictions.csv",
-                        mime="text/csv",
-                    )
 
         except Exception as e:
-            st.error(f"An error occurred while processing the file: {e}")
+            st.error(f"An error occurred during inference: {e}")
+
+        # Upload testing data
+        # Add functionality to upload test data
+        st.subheader("🔍 Upload Test Data and Predict")
+        st.write("""
+        Upload your test dataset to generate predictions using the selected model. Ensure the test dataset has the same structure (columns) as the training data.
+        """)
+
+        # File uploader for test data
+        test_data_file = st.file_uploader("Upload Test Data (CSV, Excel, or Pickle)", type=["csv", "xls", "xlsx", "pkl"],
+                                          key="test_data_uploader")
+
+        if test_data_file:
+            # Handle file upload
+            file_extension = test_data_file.name.split(".")[-1]
+            try:
+                if file_extension == "csv":
+                    test_df = pd.read_csv(test_data_file)
+                elif file_extension in ["xls", "xlsx"]:
+                    test_df = pd.read_excel(test_data_file)
+                elif file_extension == "pkl":
+                    test_df = pickle.load(test_data_file)
+                else:
+                    st.error("❌ Unsupported file type. Please upload a CSV, Excel, or Pickle file.")
+                    st.stop()
+
+                # Validate test data structure
+                if set(test_df.columns) != set(DF.columns) - {target}:
+                    st.error("❌ The columns in the test data must match the training data (excluding the target column).")
+                else:
+                    st.success("✅ Test data uploaded successfully!")
+                    st.write("Here is a preview of your test data:")
+                    st.dataframe(test_df.head())
+
+                    # Run predictions
+                    if st.button("🚀 Run Predictions"):
+                        X_test = test_df.copy()  # Ensure the test data does not include the target column
+                        predictions = inference(X_test)  # Replace this with your prediction function
+
+                        test_df['Predictions'] = predictions  # Append predictions to the test data
+                        test_df['Predictions'] = test_df['Predictions'].apply(lambda x: max(x, 1))
+                        st.success("✅ Predictions generated successfully!")
+                        st.write("Here is the test data with predictions:")
+                        st.dataframe(test_df)
+
+                        # Download predictions
+                        st.markdown("### 📥 Download Predictions")
+                        csv = test_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="Download Predictions as CSV",
+                            data=csv,
+                            file_name="predictions.csv",
+                            mime="text/csv",
+                        )
+
+            except Exception as e:
+                st.error(f"An error occurred while processing the file: {e}")
