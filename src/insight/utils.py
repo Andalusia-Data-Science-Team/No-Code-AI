@@ -1,5 +1,6 @@
 import pandas as pd, numpy as np, seaborn as sns
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
 from sklearn.cluster import KMeans
@@ -10,6 +11,8 @@ import matplotlib
 from sklearn.decomposition import PCA
 
 from scipy import stats
+from scipy.sparse import issparse
+
 from sklearn.base import BaseEstimator, TransformerMixin
 import matplotlib.pyplot as plt
 
@@ -144,13 +147,45 @@ def plot_numeric_features(df):
     
     return plots
 
+class PCADataFrameTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, column_names=None):
+        self.column_names = column_names
+    
+    def fit(self, X, y=None):
+        return self  
+    
+    def transform(self, X):
+        if isinstance(X, pd.DataFrame):
+            return X  
+        df = pd.DataFrame(X)
+        if self.column_names is not None:
+            df.columns = self.column_names
+        return df
+
+def pca_preprocessing(df: pd.DataFrame):
+    
+    st= StandardScaler()
+    if issparse(df):
+        df = pd.DataFrame(df.toarray())
+
+    df_uq = pd.DataFrame([[i, len(df[i].unique())] for i in df.columns], columns=['Variable', 'Unique Values']).set_index('Variable')
+    excluded_cols= list(df_uq[df_uq['Unique Values'] == 2].index)
+    columns_to_scale = df.columns.difference(excluded_cols)
+    data_scaled = df.copy()
+    data_scaled[columns_to_scale] = st.fit_transform(data_scaled[columns_to_scale])
+    return data_scaled
+
+
+
 def PCA_visualization(df):
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     valid_cols = [col for col in numeric_cols if df[col].nunique() >= 10]
     df= df[valid_cols]
 
+    data_scaled= pca_preprocessing(df)
+
     # Apply PCA
-    pca = PCA().fit(df)
+    pca = PCA().fit(data_scaled)
 
     # Calculate the Cumulative Sum of the Explained Variance
     explained_variance_ratio = pca.explained_variance_ratio_
@@ -191,12 +226,19 @@ def PCA_visualization(df):
             plt.text(i + x_offset, cum_ev_ratio + y_offset, f"{cum_ev_ratio:.2f}", ha="center", va="bottom", fontsize=10)
 
     plt.grid(axis='both')   
-    return plt
+    return plt, pca.n_components_
 
-def HeatMap(_df):
+def pca_data(df: pd.DataFrame, n_components: int):
+    pca = PCA(n_components=n_components)
+    data_for_pca= pca_preprocessing(df)
+    proc_data_pca = pca.fit_transform(data_for_pca)
+
+    return pd.DataFrame(proc_data_pca, columns=['PC'+str(i+1) for i in range(pca.n_components_)])
+
+def HeatMap(_df: pd.DataFrame):
     return _df.select_dtypes('number').corr()
 
-def corr_plot(_df):
+def corr_plot(_df: pd.DataFrame):
     corr_matrix= _df.select_dtypes('number').corr()
     tril_index= np.tril_indices_from(corr_matrix)
     for coord in zip(*tril_index):
@@ -384,9 +426,6 @@ class SkewnessTransformer(BaseEstimator, TransformerMixin):
             else:
                 return 'No Fix'
 
-import pandas as pd
-
-import pandas as pd
 
 def unique_percentage(df):
     return pd.DataFrame({
@@ -986,11 +1025,11 @@ def og_waterfall(shap_values, max_display=10, show=True):
     
 
 
-def silhouette_analysis(df, start_k, stop_k, figsize=(15, 16)):
+def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
     """
     Perform Silhouette analysis for a range of k values and visualize the results.
     """
-
+    df= pca_data(df, 3)
     # Set the size of the figure
     plt.figure(figsize=figsize)
 
@@ -1048,4 +1087,4 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(15, 16)):
         ax.set_title(f'Silhouette Plot for {i} Clusters', fontsize=15)
 
     plt.tight_layout()
-    plt.show()
+    return plt
