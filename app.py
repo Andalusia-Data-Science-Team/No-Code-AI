@@ -186,7 +186,7 @@ if uploaded_file is not None:
                 _, pca_comp = utils.PCA_visualization(pca_data)
                 # st.pyplot(pca_fig)
                 # pca_val= st.selectbox(f"from this data select the number of PCA compenets you want", [i for i in range(1, pca_comp + 1)])
-                cfg["pca_comp"] = pca_comp + 1
+                cfg["pca_comp"] = pca_comp
             cfg["skew_fix"] = st.checkbox("Skew Fix")
             cfg["poly_feat"] = st.checkbox("Add Polynomial Features")
             cfg["apply_GridSearch"] = st.checkbox("Apply GridSearch")
@@ -234,7 +234,11 @@ if uploaded_file is not None:
                     DF, cfg, target, task_type, split_value, all=True
                 )
                 report = model(cluster_df, cfg=cfg)
-                st.pyplot(report)
+                st.markdown(report['cluster_eval'])
+                st.write(report['clusters_descriptive_analysis'])
+                st.pyplot(report['silhouette_analysis'])
+                st.pyplot(report['cluster_dist'])
+                st.pyplot(report['cluster_analysis'])
 
         if st.button("Plot Graphs"):
             st.subheader("Outlier-Inlier Percentage")

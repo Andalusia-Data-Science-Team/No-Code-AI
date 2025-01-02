@@ -10,6 +10,8 @@ from .utils import (
     cluster_dist,
     cluster_eval,
     cluster_analysis,
+    get_pca_components,
+    describe_clusters,
 )
 from .model_utils import grid_dict
 
@@ -56,6 +58,7 @@ from sklearn.svm import SVC, SVR
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 
+from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, DBSCAN
 
 from sklearn.model_selection import GridSearchCV
@@ -245,10 +248,15 @@ class Model:
             steps=[("num_imp", SimpleImputer(missing_values=np.nan, strategy="mean"))]
         )
 
-        if not isinstance(self.algorithm, KMeans):
+        if self.cfg['pca']:
+            numerical_transformer.steps.append(
+                ("pca", PCA(n_components= self.cfg['pca_comp']))
+            )  
+
+        if not self.cfg['pca']:
             numerical_transformer.steps.append(
                 ("scaler", MinMaxScaler(feature_range=(0, 1)))
-            )  # Only scale if not KMeans
+            )  # Only scale if not PCA
 
         if skew_fix:
             numerical_transformer.steps = [
@@ -269,9 +277,8 @@ class Model:
 
         if isinstance(self.algorithm, KMeans):
             if self.model_kws["n_clusters"] == -1:
-                _X = self.preprocess(X)
-                self.plot, best_k = silhouette_analysis(_X, 2, 15)
-                self.algorithm.set_params({"n_clusters": best_k})
+                self.plot, best_k = silhouette_analysis(X, 2, 15, self.cfg['pca_comp'])
+                self.algorithm.set_params(n_clusters= best_k)
             numerical_transformer.steps.append(
                 ("to_dataframe", PCADataFrameTransformer())
             )
@@ -317,9 +324,7 @@ class Model:
         skew (bool): Apply skewness correction.
         poly (bool): Apply polynomial features.
         """
-        if self.cfg["pca"]:
-            X = pca_data(X, self.cfg["pca_comp"])
-            self.pca_data = X.copy()
+
         self.build_pipeline(X, skew_fix=skew, poly_feat=poly)
         if y is not None and y.dtypes == "object":
             y = self.label_encoder.fit_transform(y)
@@ -410,11 +415,11 @@ class Model:
         }
 
         new_labels = np.array([label_mapping[label] for label in self.model.labels_])
-        # X= self.preprocess(X)
-        # X= pd.DataFrame(X.toarray())
+        _pca_data= self.preprocess(X)
+        _pca_data= pd.DataFrame(_pca_data.toarray())
         X["cluster"] = new_labels
-        self.pca_data["cluster"] = new_labels
-        return X, self.pca_data
+        _pca_data["cluster"] = new_labels
+        return X, _pca_data
 
     def cluster_metrics(self, X):
         outs = {}
@@ -422,9 +427,11 @@ class Model:
         if self.model_kws["n_clusters"] == -1:
             outs["silhouette_analysis"] = self.plot
 
-        outs["cluster_dist"] = cluster_dist(pca_data_proc)
+        _pca_data= get_pca_components(self.pipeline, X)
+        outs["cluster_dist"] = cluster_dist(_pca_data) # with respect to PCA only
         outs["cluster_eval"] = cluster_eval(pca_data_proc)
         outs["cluster_analysis"] = cluster_analysis(og_data)
+        outs["clusters_descriptive_analysis"] = describe_clusters(og_data)
 
         return outs
 
@@ -435,6 +442,7 @@ class Model:
         Parameters:
         file_path (str): Path to save the model.
         """
+        del self.plot
         with open(file_path, "wb") as f:
             pickle.dump(self, f)
         print(f"Model saved successfully as: {file_path}")
@@ -451,20 +459,22 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
     _model = Model(cfg)
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
-    if cfg["save"]:
-        _model.save_model("model.pkl")
 
     if cfg["task_type"] == "Classification":
         # p= _model.predict_prob(X_test)
         cm, acc = _model.cls_metrics(X_test, y_test)
+        _model.save_model("model.pkl")
         return acc, cm
 
     elif cfg["task_type"] == "Regression":
         mse, r2 = _model.reg_metrics(X_test, y_test)
+        _model.save_model("model.pkl")
         return mse, r2
 
     else:
-        return _model.cluster_metrics(X_train)
+        ret= _model.cluster_metrics(X_train)
+        _model.save_model("model.pkl")
+        return ret
 
 
 def inference(X, proba=False):

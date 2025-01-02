@@ -183,14 +183,52 @@ class PCADataFrameTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X):
         if isinstance(X, pd.DataFrame):
             return X
-        df = pd.DataFrame(X.toarray())
+        df = pd.DataFrame(X)
         if self.column_names is not None:
             df.columns = self.column_names
         return df
 
 
-def pca_preprocessing(df: pd.DataFrame):
+def get_pca_components(pipeline, X):
+    """
+    Extract PCA components from the fitted pipeline.
 
+    Parameters:
+    pipeline (Pipeline): The fitted pipeline.
+    X (pd.DataFrame): The input data used to fit the pipeline.
+
+    Returns:
+    pd.DataFrame: The PCA components for the numerical features.
+    """
+    # Fit the pipeline first if not already done 
+    pipeline.fit(X)
+
+    # Extract the ColumnTransformer from the pipeline
+    preprocessor = pipeline.named_steps['preprocessor']
+
+    # Extract the numerical transformer pipeline from ColumnTransformer
+    numerical_transformer = preprocessor.transformers_[1][1]
+
+    # Check if PCA is in the numerical transformer steps
+    for name, step in numerical_transformer.steps:
+        if name == 'pca':
+            pca = step
+            # Transform the numerical data to get PCA components
+            numerical_data = X.select_dtypes("number")
+            clusters= numerical_data["cluster"]
+            numerical_data= numerical_data.drop(columns= ["cluster"])
+
+            pca_components = pca.transform(numerical_data)
+            # Return as DataFrame for easy inspection
+            _df = pd.DataFrame(pca_components, columns=[f'PC{i+1}' for i in range(pca_components.shape[1])])
+            return pd.concat([_df, clusters])
+
+    raise ValueError("PCA step not found in the pipeline.")
+
+def pca_preprocessing(df: pd.DataFrame):
+    """
+    must be applied before calling PCA
+    """
     st = StandardScaler()
     if issparse(df):
         df = pd.DataFrame(df.toarray())
@@ -214,27 +252,27 @@ def cluster_dist(pca_data: pd.DataFrame):
     cluster_percentage.sort_values(by="Cluster", inplace=True)
 
     # Create a horizontal bar plot
-    plt.figure(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(10, 4))
     sns.barplot(x="Percentage", y="Cluster", data=cluster_percentage, orient="h")
 
     # Adding percentages on the bars
     for index, value in enumerate(cluster_percentage["Percentage"]):
-        plt.text(value + 0.5, index, f"{value:.2f}%")
+        ax.text(value + 0.5, index, f"{value:.2f}%")
 
     plt.title("Distribution Across Clusters", fontsize=14)
     plt.xticks(ticks=np.arange(0, 50, 5))
     plt.xlabel("Percentage (%)")
 
     # Show the plot
-    return plt
+    return fig
 
 
-def cluster_eval(pca_data):
-    num_observations = len(pca_data)
+def cluster_eval(encoded_pca_data):
+    num_observations = len(encoded_pca_data)
 
     # Separate the features and the cluster labels
-    X = pca_data.drop("cluster", axis=1)
-    clusters = pca_data["cluster"]
+    X = encoded_pca_data.drop("cluster", axis=1)
+    clusters = encoded_pca_data["cluster"]
 
     # Compute the metrics
     sil_score = silhouette_score(X, clusters)
@@ -256,20 +294,22 @@ def cluster_eval(pca_data):
 def cluster_analysis(og_data):
     colors = ["#e8000b", "#1ac938", "#023eff"]
 
-    # Standardize the data (excluding the cluster column)
-    scaler = StandardScaler()
-    df_customer_standardized = scaler.fit_transform(
-        og_data.drop(columns=["cluster"], axis=1)
-    )
+    # Separate categorical and numerical features (excluding the cluster column)
+    categorical_features = og_data.select_dtypes(include=["object", "category"]).columns
+    numerical_features = og_data.drop(columns=["cluster"]).select_dtypes(include=["number"]).columns
 
-    # Create a new dataframe with standardized values and add the cluster column back
-    df_customer_standardized = pd.DataFrame(
-        df_customer_standardized, columns=og_data.columns[:-1], index=og_data.index
-    )
-    df_customer_standardized["cluster"] = og_data["cluster"]
+    # Standardize the numerical data
+    scaler = StandardScaler()
+    df_standardized_num = scaler.fit_transform(og_data[numerical_features])
+
+    # Create a new dataframe with standardized numerical values
+    df_standardized_num = pd.DataFrame(df_standardized_num, columns=numerical_features, index=og_data.index)
+
+    # Concatenate the categorical features (if any) and the standardized numerical features
+    df_standardized = pd.concat([df_standardized_num, og_data[categorical_features], og_data["cluster"]], axis=1)
 
     # Calculate the centroids of each cluster
-    cluster_centroids = df_customer_standardized.groupby("cluster").mean()
+    cluster_centroids = df_standardized.groupby("cluster").mean(numeric_only=True)  # Only numeric columns are averaged
 
     # Function to create a radar chart
     def create_radar_chart(ax, angles, data, color, cluster):
@@ -303,21 +343,17 @@ def cluster_analysis(og_data):
         create_radar_chart(ax[i], angles, data, color, i)
 
     # Add input data
-    ax[0].set_xticks(angles[:-1])
-    ax[0].set_xticklabels(labels[:-1])
-
-    ax[1].set_xticks(angles[:-1])
-    ax[1].set_xticklabels(labels[:-1])
-
-    ax[2].set_xticks(angles[:-1])
-    ax[2].set_xticklabels(labels[:-1])
+    for i in range(3):
+        ax[i].set_xticks(angles[:-1])
+        ax[i].set_xticklabels(labels[:-1])
 
     # Add a grid
     ax[0].grid(color="grey", linewidth=0.5)
 
     # Display the plot
     plt.tight_layout()
-    return plt
+    return fig
+
 
 
 def PCA_visualization(df):
@@ -1405,11 +1441,16 @@ def og_waterfall(shap_values, max_display=10, show=True):
         return plt.gca()
 
 
-def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
+def silhouette_analysis(_df, start_k, stop_k, pca_component, figsize=(20, 50)):
     """
     Perform Silhouette analysis for a range of k values and visualize the results.
+    VERY IMPORTANT NOTE: CALCULATING BEST K FOR KMEANS DEPENDS ONLY ON PCA AND NOT ENCODED DATA
+    THUS, PLOTTING MIGHT BE NOT FULL COMPLETE.
     """
-    df = pca_data(df, 3)
+    numerical_features = _df.select_dtypes("number").columns.tolist()
+    df= _df[numerical_features]
+
+    df = pca_data(df, pca_component)
     # Set the size of the figure
     plt.figure(figsize=figsize)
 
@@ -1484,4 +1525,44 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
         ax.set_title(f"Silhouette Plot for {i} Clusters", fontsize=15)
 
     plt.tight_layout()
-    return plt, best_k
+    return plt.gcf(), best_k
+
+import pandas as pd
+
+def describe_clusters(df, cluster_col="cluster"):
+    """
+    Separates the DataFrame into multiple dataframes based on unique clusters
+    and returns a DataFrame that contains the descriptive statistics for each cluster.
+    
+    Parameters:
+    - df: The input DataFrame with a 'cluster' column.
+    - cluster_col: The name of the cluster column (default is 'cluster').
+
+    Returns:
+    - A DataFrame with descriptive statistics for each cluster.
+    """
+
+    # Ensure the cluster column exists
+    if cluster_col not in df.columns:
+        raise ValueError(f"'{cluster_col}' column not found in the DataFrame")
+
+    # List to store the descriptive stats of each cluster
+    cluster_descriptions = []
+
+    # Iterate through each unique cluster and calculate its description
+    for cluster in df[cluster_col].unique():
+        # Get the data for the current cluster
+        cluster_data = df[df[cluster_col] == cluster]
+
+        # Get descriptive statistics for the cluster (excluding the cluster column itself)
+        cluster_description = cluster_data.describe().T  # Transpose for better readability
+        cluster_description["cluster"] = cluster  # Add a cluster identifier column
+
+        # Append the description to the list
+        cluster_descriptions.append(cluster_description)
+
+    # Concatenate all the descriptive statistics into a single DataFrame
+    result = pd.concat(cluster_descriptions)
+
+    # Return the concatenated descriptive statistics DataFrame
+    return result
