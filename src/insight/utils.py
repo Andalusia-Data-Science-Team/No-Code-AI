@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from sklearn.metrics import silhouette_score
 from yellowbrick.cluster import SilhouetteVisualizer
-
+import plotly.express as px
+import plotly.graph_objects as go
 def list_wrap(x):
     """A helper to patch things since slicer doesn't handle arrays of arrays (it does handle lists of arrays)"""
     if isinstance(x, np.ndarray) and len(x.shape) == 1 and isinstance(x[0], np.ndarray):
@@ -264,7 +265,12 @@ def inf_proc(item):
 
 def descriptive_analysis(df):
     num_des_analysis= df.describe().T
-    cat_des_analysis= df.describe(include= 'object').T
+    if df.select_dtypes(include=['object']).shape[1] > 0:
+        cat_des_analysis = df.describe(include='object').T
+    else:
+        cat_des_analysis = pd.DataFrame()  # Create an empty DataFrame or handle appropriately
+
+    cat_des_analysis = df.describe(include='object').T
     d_types= pd.DataFrame(df.dtypes, columns= ['type'])
     missing_percentage= pd.DataFrame((df.isna().sum() / len(df)) * 100, columns=['missing %']).round(2)
     dups_percentage= (len(df[df.duplicated()]) / len(df)) *100
@@ -1029,7 +1035,8 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
     """
     Perform Silhouette analysis for a range of k values and visualize the results.
     """
-    df= pca_data(df, 3)
+    #comment the pca in this step
+    #df= pca_data(df, 3)
     # Set the size of the figure
     plt.figure(figsize=figsize)
 
@@ -1088,3 +1095,31 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
 
     plt.tight_layout()
     return plt
+
+
+def cluster_scatter_plot(df, x_col, y_col, cluster_col='Cluster'):
+    """Create an interactive scatter plot for clustering results."""
+    fig = go.Figure()
+
+    # Add scatter plot for each cluster
+    for cluster in df[cluster_col].unique():
+        cluster_data = df[df[cluster_col] == cluster]
+        fig.add_trace(
+            go.Scatter(
+                x=cluster_data[x_col],
+                y=cluster_data[y_col],
+                mode='markers',
+                name=f'Cluster {cluster}',
+                marker=dict(size=10, opacity=0.8),
+                text=cluster_data[cluster_col]  # Add cluster labels as hover text
+            )
+        )
+
+    # Update layout to ensure continuous axes
+    fig.update_layout(
+        #xaxis=dict(title=x_col, type='linear'),  # Ensure x-axis is treated as continuous
+       # yaxis=dict(title=y_col, type='linear'),  # Ensure y-axis is treated as continuous
+        title="Cluster Scatter Plot",
+        showlegend=True
+    )
+    return fig
