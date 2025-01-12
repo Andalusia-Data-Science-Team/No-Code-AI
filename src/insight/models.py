@@ -6,7 +6,6 @@ from .utils import (
     SkewnessTransformer,
     silhouette_analysis,
     PCADataFrameTransformer,
-    pca_data,
     cluster_dist,
     cluster_eval,
     cluster_analysis,
@@ -16,7 +15,8 @@ from .utils import (
 from .model_utils import grid_dict
 
 import pickle
-import pandas as pd, numpy as np
+import pandas as pd
+import numpy as np
 
 from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -248,12 +248,12 @@ class Model:
             steps=[("num_imp", SimpleImputer(missing_values=np.nan, strategy="mean"))]
         )
 
-        if self.cfg['pca']:
+        if self.cfg["pca"]:
             numerical_transformer.steps.append(
-                ("pca", PCA(n_components= self.cfg['pca_comp']))
-            )  
+                ("pca", PCA(n_components=self.cfg["pca_comp"]))
+            )
 
-        if not self.cfg['pca']:
+        if not self.cfg["pca"]:
             numerical_transformer.steps.append(
                 ("scaler", MinMaxScaler(feature_range=(0, 1)))
             )  # Only scale if not PCA
@@ -277,8 +277,8 @@ class Model:
 
         if isinstance(self.algorithm, KMeans):
             if self.model_kws["n_clusters"] == -1:
-                self.plot, best_k = silhouette_analysis(X, 2, 15, self.cfg['pca_comp'])
-                self.algorithm.set_params(n_clusters= best_k)
+                self.plot, best_k = silhouette_analysis(X, 2, 15, self.cfg["pca_comp"])
+                self.algorithm.set_params(n_clusters=best_k)
             numerical_transformer.steps.append(
                 ("to_dataframe", PCADataFrameTransformer())
             )
@@ -415,8 +415,8 @@ class Model:
         }
 
         new_labels = np.array([label_mapping[label] for label in self.model.labels_])
-        _pca_data= self.preprocess(X)
-        _pca_data= pd.DataFrame(_pca_data.toarray())
+        _pca_data = self.preprocess(X)
+        _pca_data = pd.DataFrame(_pca_data.toarray())
         X["cluster"] = new_labels
         _pca_data["cluster"] = new_labels
         return X, _pca_data
@@ -427,8 +427,8 @@ class Model:
         if self.model_kws["n_clusters"] == -1:
             outs["silhouette_analysis"] = self.plot
 
-        _pca_data= get_pca_components(self.pipeline, X)
-        outs["cluster_dist"] = cluster_dist(_pca_data) # with respect to PCA only
+        _pca_data = get_pca_components(self.pipeline, X)
+        outs["cluster_dist"] = cluster_dist(_pca_data)  # with respect to PCA only
         outs["cluster_eval"] = cluster_eval(pca_data_proc)
         outs["cluster_analysis"] = cluster_analysis(og_data)
         outs["clusters_descriptive_analysis"] = describe_clusters(og_data)
@@ -472,7 +472,7 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         return mse, r2
 
     else:
-        ret= _model.cluster_metrics(X_train)
+        ret = _model.cluster_metrics(X_train)
         _model.save_model("model.pkl")
         return ret
 

@@ -5,6 +5,7 @@
 venv*
 env/
 ENV/
+virenv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

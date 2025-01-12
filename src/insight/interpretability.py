@@ -1,7 +1,8 @@
 import shap
 
-import pandas as pd, numpy as np
-from .utils import my_waterfall, og_waterfall
+import pandas as pd
+import numpy as np
+from .utils import my_waterfall
 
 from sklearn.linear_model import (
     LogisticRegression,
@@ -194,7 +195,7 @@ class Interpretability:
                 x=cls_imp.values,
                 y=cls_imp.index,
                 orientation="h",
-                title=f"Feature Importance of the Aggregated Classes",
+                title="Feature Importance of the Aggregated Classes",
             )
             fig.update_layout(
                 xaxis_range=[0, cls_imp.max() * 1.1],  # padding max val

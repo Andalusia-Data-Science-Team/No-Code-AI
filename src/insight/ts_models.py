@@ -45,7 +45,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         train_size = int(len(feature_df) * self.test_size)
         self.train_df, self.test_df = (
             feature_df[:train_size],
-            feature_df[train_size + 1 :],
+            feature_df[train_size + 1:],
         )
 
         # feature_df.set_index('ds', inplace= True)
@@ -146,6 +146,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
     def _rms(self):
         target = self.test_df[: self.f_period]["y"]
-        pred = self.forcast["yhat"][-self.f_period :]
+        pred = self.forcast["yhat"][-self.f_period:]
 
         print(mse(target, pred, squared=False))

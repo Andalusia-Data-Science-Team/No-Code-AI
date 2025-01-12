@@ -1,5 +1,7 @@
 import streamlit as st
-import pandas as pd, numpy as np, random
+import pandas as pd
+import numpy as np
+import random
 import insight.utils as utils
 from insight.models import model, inference, get_corresponding_labels
 import matplotlib.pyplot as plt
@@ -29,7 +31,7 @@ if uploaded_file is not None:
             _model = pickle.load(uploaded_file)
             st.success("Pickle file loaded successfully!")
         except pickle.UnpicklingError as e:
-            st.error("Error: Invalid pickle file. Please upload a valid pickle file.")
+            st.error(f"Error {e}: Invalid pickle file. Please upload a valid pickle file.")
     else:
         st.error("Please upload a CSV, Excel or Pickle file.")
 
@@ -184,6 +186,7 @@ if uploaded_file is not None:
                     back_DF, cfg, target, task_type, split_value, all=True
                 )
                 _, pca_comp = utils.PCA_visualization(pca_data)
+                print(pca_comp)
                 # st.pyplot(pca_fig)
                 # pca_val= st.selectbox(f"from this data select the number of PCA compenets you want", [i for i in range(1, pca_comp + 1)])
                 cfg["pca_comp"] = pca_comp
@@ -292,7 +295,7 @@ if uploaded_file is not None:
         classes = None
         if feature_contribution:
             target_cls = st.selectbox("Select the target class", list(y_train.unique()))
-            if type(DF[target][0]) == str:
+            if type(DF[target][0]) is str:
                 classes, target_cls = get_corresponding_labels(target_cls, True)
                 # st.write(classes)
             if st.button("Generate Random Index"):
