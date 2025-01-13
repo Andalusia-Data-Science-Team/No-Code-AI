@@ -11,6 +11,7 @@ import re
 from shap.plots import colors
 import matplotlib
 from sklearn.decomposition import PCA
+from typing import List, Optional
 
 from scipy import stats
 from scipy.sparse import issparse
@@ -860,7 +861,7 @@ def my_waterfall(
     width = bbox.width
     bbox_to_xscale = xlen / width
     hl_scaled = bbox_to_xscale * head_length
-    renderer = fig.canvas.get_renderer()
+    renderer = fig.canvas.get_renderer()  # type: ignore
 
     # draw the positive arrows
     for i in range(len(pos_inds)):
@@ -1118,8 +1119,8 @@ def og_waterfall(shap_values, max_display=10, show=True):
     )
 
     feature_names = shap_values.feature_names
-    lower_bounds = getattr(shap_values, "lower_bounds", None)
-    upper_bounds = getattr(shap_values, "upper_bounds", None)
+    lower_bounds: Optional[List[float]] = getattr(shap_values, "lower_bounds", None)
+    upper_bounds: Optional[List[float]] = getattr(shap_values, "upper_bounds", None)
     values = shap_values.values
 
     # unwrap pandas series
@@ -1168,14 +1169,14 @@ def og_waterfall(shap_values, max_display=10, show=True):
         if sval >= 0:
             pos_inds.append(rng[i])
             pos_widths.append(sval)
-            if lower_bounds is not None:
+            if lower_bounds is not None and upper_bounds is not None:
                 pos_low.append(lower_bounds[order[i]])
                 pos_high.append(upper_bounds[order[i]])
             pos_lefts.append(loc)
         else:
             neg_inds.append(rng[i])
             neg_widths.append(sval)
-            if lower_bounds is not None:
+            if lower_bounds is not None and upper_bounds is not None:
                 neg_low.append(lower_bounds[order[i]])
                 neg_high.append(upper_bounds[order[i]])
             neg_lefts.append(loc)
@@ -1251,7 +1252,7 @@ def og_waterfall(shap_values, max_display=10, show=True):
     width = bbox.width
     bbox_to_xscale = xlen / width
     hl_scaled = bbox_to_xscale * head_length
-    renderer = fig.canvas.get_renderer()
+    renderer = fig.canvas.get_renderer()  # type: ignore
 
     # draw the positive arrows
     for i in range(len(pos_inds)):

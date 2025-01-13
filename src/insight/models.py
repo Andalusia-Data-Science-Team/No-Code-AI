@@ -119,11 +119,11 @@ class BaseModel(ABC):
 
     def fit(self, X, y):
         self.ensure_pipeline_built()
-        self.pipeline.fit(X, y)
+        self.pipeline.fit(X, y)  # type: ignore
 
     def predict(self, X):
         self.ensure_pipeline_built()
-        return self.pipeline.predict(X)
+        return self.pipeline.predict(X)  # type: ignore
 
 
 class KFoldModel(BaseEstimator, TransformerMixin):
@@ -182,10 +182,16 @@ class GridSearchModel(BaseEstimator, TransformerMixin):
         return X
 
     def predict(self, X):
-        return self.best_estimator_.predict(X)
+        if self.best_estimator_ is not None:
+            return self.best_estimator_.predict(X)
+        else:
+            raise ValueError("Grid model isn't fitted yet")
 
     def predict_prob(self, X):
-        return self.best_estimator_.predict_proba(X)
+        if self.best_estimator_ is not None:
+            return self.best_estimator_.predict_proba(X)
+        else:
+            raise ValueError("Grid model isn't fitted yet")
 
 
 class Model:
@@ -262,7 +268,7 @@ class Model:
             numerical_transformer.steps = [
                 step for step in numerical_transformer.steps if step[0] != "num_imp"
             ]
-            numerical_transformer.steps.append(
+            numerical_transformer.steps.append(  # type: ignore[func-returns-value]
                 ("skew_fix", SkewnessTransformer(skew_limit=0.75))
             ),
             numerical_transformer.steps.append(
@@ -329,8 +335,9 @@ class Model:
         if y is not None and y.dtypes == "object":
             y = self.label_encoder.fit_transform(y)
 
-        self.pipeline.fit(X, y)
-        self.model = self.pipeline.named_steps["model"]
+        if self.pipeline is not None:
+            self.pipeline.fit(X, y)
+            self.model = self.pipeline.named_steps["model"]
 
     def preprocess(self, X):
         """
@@ -339,7 +346,8 @@ class Model:
         Parameters:
         X (pd.DataFrame): The input data to preprocess.
         """
-        return self.pipeline.named_steps["preprocessor"].transform(X)
+        if self.pipeline is not None:
+            return self.pipeline.named_steps["preprocessor"].transform(X)
 
     def predict(self, X):
         """
@@ -352,7 +360,8 @@ class Model:
         array-like: Predicted clusters or labels.
         """
         X = self.preprocess(X)
-        return self.model.predict(X)
+        if self.model is not None:
+            return self.model.predict(X)
 
     def predict_prob(self, X):
         """
@@ -364,8 +373,9 @@ class Model:
         Returns:
         array-like: Predicted probabilities.
         """
-        X = self.preprocess(X)
-        return self.model.predict_proba(X)
+        if self.model is not None:
+            X = self.preprocess(X)
+            return self.model.predict_proba(X)
 
     def cls_metrics(self, X: pd.DataFrame, y_true: pd.Series):
         """
@@ -406,7 +416,7 @@ class Model:
         return mse, r2
 
     def process_cluster(self, X):
-        self.model: KMeans
+        self.model: KMeans  # type: ignore
         cluster_frequencies = Counter(self.model.labels_)
 
         label_mapping = {

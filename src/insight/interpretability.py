@@ -75,7 +75,6 @@ class Interpretability:
         self.y_train = y_train
         self.y_test = y_test
         self.explainer = None
-        self.shap_values = None
         self.model = self.model_check(_model)
         self._compute_shap_values()
         if len(self.shap_values.shape) > 2:
@@ -115,7 +114,7 @@ class Interpretability:
                     self.model, feature_names=self.all_feature_names
                 )
 
-        elif isinstance(
+        elif isinstance(  # type: ignore[unreachable]
             self.model, (LogisticRegression, LinearRegression, Ridge, Lasso, ElasticNet)
         ):
             self.explainer = shap.LinearExplainer(self.model, self.X_train)
@@ -509,7 +508,7 @@ class Interpretability:
 def shap_lime(
     cfg, X_train, X_test, y_train=None, y_test=None, m=None, apply_prior=True, **kwargs
 ):
-    plts = []
+    plts = []  # type: ignore
 
     if m is None:
         try:
