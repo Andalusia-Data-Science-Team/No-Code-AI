@@ -74,7 +74,11 @@ if uploaded_file is not None:
         )
         cols = back_DF.columns
         if task_type != "Cluster":
-            target = st.selectbox("Select The Target", cols)
+            if task_type != "Classification":
+                numeric_features = df.select_dtypes(include=np.number).columns
+                target = st.selectbox("Select The Target", numeric_features)
+            else:
+                target = st.selectbox("Select The Target", cols)
         selected_options = st.multiselect("Select columns to be removed", cols)
         DF = back_DF.drop(selected_options, axis=1)
 
