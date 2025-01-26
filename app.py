@@ -24,8 +24,10 @@ if uploaded_file is not None:
 
     if file_extension.lower() == "csv":
         df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip()
     elif file_extension.lower() in ["xls", "xlsx"]:
         df = pd.read_excel(uploaded_file)
+        df.columns = df.columns.str.strip()
     elif file_extension.lower() == "pkl":
         try:
             _model = pickle.load(uploaded_file)
@@ -151,8 +153,11 @@ if uploaded_file is not None:
                 ts_kw["target_col"] = target
                 ts_kw["prophet_params"] = {}
                 ts_kw["selected_cols"] = {}
-                ts_kw["freq"] = "1min"
-                ts_kw["f_period"] = 5
+                freq = st.selectbox("Select The Frequency of Data",
+                                    ["Minutely", "Hourly", "Daily", "Weekly", "Monthly"])
+                mappings = {"Minutely": "min", "Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M"}
+                ts_kw["freq"] = mappings[freq]
+                ts_kw["f_period"] = st.number_input("Enter Number of Periods to Forecast", value=1)
                 cfg["ts_config"] = ts_kw
 
             cfg["skew_fix"] = st.checkbox("Skew Fix")

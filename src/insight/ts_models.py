@@ -1,7 +1,7 @@
 import pandas as pd
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import mean_squared_error as mse
+from sklearn.metrics import root_mean_squared_error, mean_absolute_percentage_error
 
 import plotly.express as px
 
@@ -16,9 +16,9 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self,
         date_col,
         target_col,
+        freq,
         prophet_params=None,
         selected_cols=None,
-        freq="1min",
         f_period=5,
         test_size=0.05,
     ):
@@ -27,7 +27,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.target_col = target_col
         self.prophet_params = prophet_params or {}
         self.selected_cols = selected_cols
-        self.freq = freq
+        self.freq = self.infer_freq()
         self.f_period = f_period
         self.test_size = 1 - test_size
 
@@ -64,8 +64,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X=None):
-        self.forcast = self.m.predict(self.future_preds)
-        self._rms()
+        self.forecast = self.m.predict(self.future_preds)
+        self.calculate_errors()
         return self
 
     def create_features(self, df: pd.DataFrame, selected_columns):
@@ -138,14 +138,21 @@ class ProphetModel(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None):
         return self.fit(X, y).transform(X)
 
-    def plot_forcast(self):
-        return self.m.plot(self.forcast)
+    def plot_forecast(self):
+        return self.m.plot(self.forecast)
 
     def plot_component(self):
-        return self.m.plot_components(self.forcast)
+        return self.m.plot_components(self.forecast)
 
-    def _rms(self):
+    def calculate_errors(self):
+        """
+        Calculate and return error evaluation metrics: RMSE and MAPE.
+        """
         target = self.test_df[: self.f_period]["y"]
-        pred = self.forcast["yhat"][-self.f_period:]
+        pred = self.forecast["yhat"][-self.f_period:]
 
-        print(mse(target, pred, squared=False))
+        rmse = root_mean_squared_error(target, pred)
+        mape = mean_absolute_percentage_error(target, pred) * 100
+
+        print(f"RMSE: {rmse}")
+        print(f"MAPE: {mape}")

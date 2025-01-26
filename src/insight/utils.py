@@ -12,6 +12,8 @@ from shap.plots import colors
 import matplotlib
 from sklearn.decomposition import PCA
 
+import plotly.graph_objects as go
+
 from scipy import stats
 from scipy.sparse import issparse
 
@@ -86,6 +88,20 @@ def missing(_df, clean_method="Remove Missing Data"):
 
     else:
         raise ValueError("Invalied input for imputing")
+
+
+def resample(df, date_col, target_col, freq):  # For TimeSeries data
+    """
+    Resample the data to the inferred frequency and fill missing values.
+    """
+    others = [col for col in df.columns if col not in [target_col]]
+    df_others = df[others]
+    _df = df[[date_col, target_col]]
+    _df = _df.set_index(date_col, inplace=False).resample(freq).mean()  # Mean for aggregation
+    _df[target_col] = _df[target_col].interpolate(method="linear")
+    _df = _df.reset_index()
+    resampled = _df.merge(df_others, on=date_col, how='left')
+    return resampled
 
 
 def IQR(_df, lower_bound=0.25, upper_bound=0.75, multiplier=1.5):
@@ -539,8 +555,25 @@ def convert_numeric(df):
 
 
 def process_data(_df, cfg, target, task_type, split_value, all=False):
-    _DF = missing(_df, cfg["clean"])
-    _DF = remove_outliers(_DF, cfg["outlier"])
+    if cfg["outlier"] != "Use Isolation Forest":
+        # Remove outliers before imputation for a more precise mean calculation
+        if task_type != "Time":
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = missing(_DF, cfg["clean"])
+        else:
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = resample(_DF, cfg["ts_config"]["date_col"], cfg["ts_config"]["target_col"], cfg["ts_config"]["freq"])
+            _DF = missing(_DF, cfg["clean"])
+    else:  # Because Isolation Forest doesn't handle null values
+        if task_type != "Time":
+            _DF = missing(_df, cfg["clean"])
+            _DF = remove_outliers(_DF, cfg["outlier"])
+        else:
+            _DF = missing(_DF, cfg["clean"])
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = resample(_DF, cfg["ts_config"]["date_col"], cfg["ts_config"]["target_col"], cfg["ts_config"]["freq"])
+            _DF = missing(_DF, cfg["clean"])
+
     if all:
         return _DF
 
@@ -1580,3 +1613,21 @@ def describe_clusters(df, cluster_col="cluster"):
 
     # Return the concatenated descriptive statistics DataFrame
     return result
+
+
+def plot_raw_ts(df, date_col, target_col):
+    """
+    Plot the raw time series data.
+
+    Args:
+    - data (pd.DataFrame): DataFrame of time series data.
+    - date_col (String): The name of the date column.
+    - target_col (String): The name of the target column.
+    """
+    fig = go.Figure(
+        [go.Scatter(x=df[date_col], y=df[target_col], mode="lines", name="Raw Data")]
+    )
+    fig.update_layout(
+        title="Raw Time Series Data", xaxis_title=date_col, yaxis_title=target_col
+    )
+    fig.show()
