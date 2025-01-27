@@ -498,6 +498,7 @@ def inf_proc(item):
 
 
 def descriptive_analysis(df):
+    # To handle the case of only numeric or only object data
     num_des_analysis = None
     cat_des_analysis = None
     if len(df.select_dtypes(include=np.number).columns) != 0:
