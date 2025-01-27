@@ -17,9 +17,9 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         date_col,
         target_col,
         freq,
+        f_period,
         prophet_params=None,
         selected_cols=None,
-        f_period=5,
         test_size=0.05,
     ):
 
@@ -27,9 +27,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.target_col = target_col
         self.prophet_params = prophet_params or {}
         self.selected_cols = selected_cols
-        self.freq = self.infer_freq()
+        self.freq = freq
         self.f_period = f_period
-        self.test_size = 1 - test_size
 
     def fit(self, X, y=None):
 
@@ -42,11 +41,11 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
         feature_df = self.create_features(df, self.selected_cols)
-        train_size = int(len(feature_df) * self.test_size)
-        self.train_df, self.test_df = (
-            feature_df[:train_size],
-            feature_df[train_size + 1:],
-        )
+
+        train_size = int(len(feature_df) * self.f_period)
+
+        self.train_df = feature_df.iloc[:train_size]
+        self.test_df = feature_df.iloc[-self.f_period:]
 
         # feature_df.set_index('ds', inplace= True)
         df_mod = self.feature_eng(self.train_df[["ds", "y"]])
@@ -146,13 +145,14 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
     def calculate_errors(self):
         """
-        Calculate and return error evaluation metrics: RMSE and MAPE.
+        Make predictions, calculate and return error evaluation metrics: RMSE and MAPE.
         """
         target = self.test_df[: self.f_period]["y"]
+        # last_n_rows = df['column_name'].tail(n)
+
         pred = self.forecast["yhat"][-self.f_period:]
 
         rmse = root_mean_squared_error(target, pred)
         mape = mean_absolute_percentage_error(target, pred) * 100
 
-        print(f"RMSE: {rmse}")
-        print(f"MAPE: {mape}")
+        return rmse, mape

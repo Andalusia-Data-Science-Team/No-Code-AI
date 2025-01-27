@@ -49,8 +49,9 @@ if uploaded_file is not None:
     ) = utils.descriptive_analysis(df)
     st.subheader("Numerical Description")
     st.write(num_des_analysis)
-    st.subheader("Categorical Description")
-    st.write(cat_des_analysis)
+    if cat_des_analysis is not None:
+        st.subheader("Categorical Description")
+        st.write(cat_des_analysis)
     st.subheader("DataFrame Types")
     st.write(d_types)
     st.subheader("Missing per Column %")
@@ -235,10 +236,14 @@ if uploaded_file is not None:
                 ts_df = utils.process_data(
                     DF, cfg, target, task_type, split_value, all=True
                 )
-                pf = model(ts_df, cfg=cfg)
+                pf, rmse, mape = model(ts_df, cfg=cfg)
                 st.plotly_chart(pf.slide_display())
-                st.pyplot(pf.plot_forcast())
+                st.pyplot(pf.plot_forecast())
                 st.pyplot(pf.plot_component())
+                st.write("RMSE:")
+                st.write(rmse)
+                st.write("MAPE")
+                st.write(mape)
 
             if task_type == "Cluster":
                 st.write("Perform Clustering task with option:")

@@ -12,7 +12,6 @@ from shap.plots import colors
 import matplotlib
 from sklearn.decomposition import PCA
 
-import plotly.graph_objects as go
 
 from scipy import stats
 from scipy.sparse import issparse
@@ -94,6 +93,7 @@ def resample(df, date_col, target_col, freq):  # For TimeSeries data
     """
     Resample the data to the inferred frequency and fill missing values.
     """
+    df[date_col] = pd.to_datetime(df[date_col])
     others = [col for col in df.columns if col not in [target_col]]
     df_others = df[others]
     _df = df[[date_col, target_col]]
@@ -499,7 +499,9 @@ def inf_proc(item):
 
 def descriptive_analysis(df):
     num_des_analysis = df.describe().T
-    cat_des_analysis = df.describe(include="object").T
+    cat_des_analysis = None
+    if len(df.select_dtypes(include=object).columns) != 0:
+        cat_des_analysis = df.describe(include="object").T
     d_types = pd.DataFrame(df.dtypes, columns=["type"])
     missing_percentage = pd.DataFrame(
         (df.isna().sum() / len(df)) * 100, columns=["missing %"]
@@ -569,7 +571,7 @@ def process_data(_df, cfg, target, task_type, split_value, all=False):
             _DF = missing(_df, cfg["clean"])
             _DF = remove_outliers(_DF, cfg["outlier"])
         else:
-            _DF = missing(_DF, cfg["clean"])
+            _DF = missing(_df, cfg["clean"])
             _DF = remove_outliers(_df, cfg["outlier"])
             _DF = resample(_DF, cfg["ts_config"]["date_col"], cfg["ts_config"]["target_col"], cfg["ts_config"]["freq"])
             _DF = missing(_DF, cfg["clean"])
@@ -1613,21 +1615,3 @@ def describe_clusters(df, cluster_col="cluster"):
 
     # Return the concatenated descriptive statistics DataFrame
     return result
-
-
-def plot_raw_ts(df, date_col, target_col):
-    """
-    Plot the raw time series data.
-
-    Args:
-    - data (pd.DataFrame): DataFrame of time series data.
-    - date_col (String): The name of the date column.
-    - target_col (String): The name of the target column.
-    """
-    fig = go.Figure(
-        [go.Scatter(x=df[date_col], y=df[target_col], mode="lines", name="Raw Data")]
-    )
-    fig.update_layout(
-        title="Raw Time Series Data", xaxis_title=date_col, yaxis_title=target_col
-    )
-    fig.show()
