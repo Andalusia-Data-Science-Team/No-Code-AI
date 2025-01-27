@@ -1,7 +1,7 @@
 import pandas as pd
 
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import mean_squared_error as mse
+from sklearn.metrics import root_mean_squared_error, mean_absolute_percentage_error
 
 import plotly.express as px
 
@@ -16,10 +16,10 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self,
         date_col,
         target_col,
+        freq,
+        f_period,
         prophet_params=None,
         selected_cols=None,
-        freq="1min",
-        f_period=5,
         test_size=0.05,
     ):
 
@@ -29,7 +29,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.selected_cols = selected_cols
         self.freq = freq
         self.f_period = f_period
-        self.test_size = 1 - test_size
 
     def fit(self, X, y=None):
 
@@ -42,11 +41,11 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
         feature_df = self.create_features(df, self.selected_cols)
-        train_size = int(len(feature_df) * self.test_size)
-        self.train_df, self.test_df = (
-            feature_df[:train_size],
-            feature_df[train_size + 1:],
-        )
+
+        train_size = int(len(feature_df) * self.f_period)
+
+        self.train_df = feature_df.iloc[:train_size]
+        self.test_df = feature_df.iloc[-self.f_period:]
 
         # feature_df.set_index('ds', inplace= True)
         df_mod = self.feature_eng(self.train_df[["ds", "y"]])
@@ -64,8 +63,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X=None):
-        self.forcast = self.m.predict(self.future_preds)
-        self._rms()
+        self.forecast = self.m.predict(self.future_preds)
+        self.calculate_errors()
         return self
 
     def create_features(self, df: pd.DataFrame, selected_columns):
@@ -138,14 +137,22 @@ class ProphetModel(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None):
         return self.fit(X, y).transform(X)
 
-    def plot_forcast(self):
-        return self.m.plot(self.forcast)
+    def plot_forecast(self):
+        return self.m.plot(self.forecast)
 
     def plot_component(self):
-        return self.m.plot_components(self.forcast)
+        return self.m.plot_components(self.forecast)
 
-    def _rms(self):
+    def calculate_errors(self):
+        """
+        Make predictions, calculate and return error evaluation metrics: RMSE and MAPE.
+        """
         target = self.test_df[: self.f_period]["y"]
-        pred = self.forcast["yhat"][-self.f_period:]
+        # last_n_rows = df['column_name'].tail(n)
 
-        print(mse(target, pred, squared=False))
+        pred = self.forecast["yhat"][-self.f_period:]
+
+        rmse = root_mean_squared_error(target, pred)
+        mape = mean_absolute_percentage_error(target, pred) * 100
+
+        return rmse, mape

@@ -465,7 +465,8 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         print("Setting Prophet args")
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
-        return pf
+        rmse, mape = pf.calculate_errors()
+        return pf, rmse, mape
 
     _model = Model(cfg)
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])

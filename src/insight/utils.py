@@ -13,6 +13,7 @@ import matplotlib
 from sklearn.decomposition import PCA
 from typing import List, Optional
 
+
 from scipy import stats
 from scipy.sparse import issparse
 
@@ -87,6 +88,21 @@ def missing(_df, clean_method="Remove Missing Data"):
 
     else:
         raise ValueError("Invalied input for imputing")
+
+
+def resample(df, date_col, target_col, freq):  # For TimeSeries data
+    """
+    Resample the data to the inferred frequency and fill missing values.
+    """
+    df[date_col] = pd.to_datetime(df[date_col])
+    others = [col for col in df.columns if col not in [target_col]]
+    df_others = df[others]
+    _df = df[[date_col, target_col]]
+    _df = _df.set_index(date_col, inplace=False).resample(freq).mean()  # Mean for aggregation
+    _df[target_col] = _df[target_col].interpolate(method="linear")
+    _df = _df.reset_index()
+    resampled = _df.merge(df_others, on=date_col, how='left')
+    return resampled
 
 
 def IQR(_df, lower_bound=0.25, upper_bound=0.75, multiplier=1.5):
@@ -483,8 +499,13 @@ def inf_proc(item):
 
 
 def descriptive_analysis(df):
-    num_des_analysis = df.describe().T
-    cat_des_analysis = df.describe(include="object").T
+    # To handle the case of only numeric or only object data
+    num_des_analysis = None
+    cat_des_analysis = None
+    if len(df.select_dtypes(include=np.number).columns) != 0:
+        num_des_analysis = df.describe().T
+    if len(df.select_dtypes(include=object).columns) != 0:
+        cat_des_analysis = df.describe(include="object").T
     d_types = pd.DataFrame(df.dtypes, columns=["type"])
     missing_percentage = pd.DataFrame(
         (df.isna().sum() / len(df)) * 100, columns=["missing %"]
@@ -540,8 +561,25 @@ def convert_numeric(df):
 
 
 def process_data(_df, cfg, target, task_type, split_value, all=False):
-    _DF = missing(_df, cfg["clean"])
-    _DF = remove_outliers(_DF, cfg["outlier"])
+    if cfg["outlier"] != "Use Isolation Forest":
+        # Remove outliers before imputation for a more precise mean calculation
+        if task_type != "Time":
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = missing(_DF, cfg["clean"])
+        else:
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = resample(_DF, cfg["ts_config"]["date_col"], cfg["ts_config"]["target_col"], cfg["ts_config"]["freq"])
+            _DF = missing(_DF, cfg["clean"])
+    else:  # Because Isolation Forest doesn't handle null values
+        if task_type != "Time":
+            _DF = missing(_df, cfg["clean"])
+            _DF = remove_outliers(_DF, cfg["outlier"])
+        else:
+            _DF = missing(_df, cfg["clean"])
+            _DF = remove_outliers(_df, cfg["outlier"])
+            _DF = resample(_DF, cfg["ts_config"]["date_col"], cfg["ts_config"]["target_col"], cfg["ts_config"]["freq"])
+            _DF = missing(_DF, cfg["clean"])
+
     if all:
         return _DF
 

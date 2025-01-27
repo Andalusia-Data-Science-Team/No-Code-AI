@@ -24,8 +24,10 @@ if uploaded_file is not None:
 
     if file_extension.lower() == "csv":
         df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip()
     elif file_extension.lower() in ["xls", "xlsx"]:
         df = pd.read_excel(uploaded_file)
+        df.columns = df.columns.str.strip()
     elif file_extension.lower() == "pkl":
         try:
             _model = pickle.load(uploaded_file)
@@ -45,10 +47,12 @@ if uploaded_file is not None:
         dups_percentage,
         u_cols,
     ) = utils.descriptive_analysis(df)
-    st.subheader("Numerical Description")
-    st.write(num_des_analysis)
-    st.subheader("Categorical Description")
-    st.write(cat_des_analysis)
+    if num_des_analysis is not None:
+        st.subheader("Numerical Description")
+        st.write(num_des_analysis)
+    if cat_des_analysis is not None:
+        st.subheader("Categorical Description")
+        st.write(cat_des_analysis)
     st.subheader("DataFrame Types")
     st.write(d_types)
     st.subheader("Missing per Column %")
@@ -72,7 +76,11 @@ if uploaded_file is not None:
         )
         cols = back_DF.columns
         if task_type != "Cluster":
-            target = st.selectbox("Select The Target", cols)
+            if task_type != "Classification":
+                numeric_features = df.select_dtypes(include=np.number).columns
+                target = st.selectbox("Select The Target", numeric_features)
+            else:
+                target = st.selectbox("Select The Target", cols)
         selected_options = st.multiselect("Select columns to be removed", cols)
         DF = back_DF.drop(selected_options, axis=1)
 
@@ -151,8 +159,11 @@ if uploaded_file is not None:
                 ts_kw["target_col"] = target
                 ts_kw["prophet_params"] = {}
                 ts_kw["selected_cols"] = {}
-                ts_kw["freq"] = "1min"
-                ts_kw["f_period"] = 5
+                freq = st.selectbox("Select The Frequency of Data",
+                                    ["Minutely", "Hourly", "Daily", "Weekly", "Monthly"])
+                mappings = {"Minutely": "min", "Hourly": "H", "Daily": "D", "Weekly": "W", "Monthly": "M"}
+                ts_kw["freq"] = mappings[freq]
+                ts_kw["f_period"] = st.number_input("Enter Number of Periods to Forecast", value=1)
                 cfg["ts_config"] = ts_kw
 
             cfg["skew_fix"] = st.checkbox("Skew Fix")
@@ -226,10 +237,14 @@ if uploaded_file is not None:
                 ts_df = utils.process_data(
                     DF, cfg, target, task_type, split_value, all=True
                 )
-                pf = model(ts_df, cfg=cfg)
+                pf, rmse, mape = model(ts_df, cfg=cfg)
                 st.plotly_chart(pf.slide_display())
-                st.pyplot(pf.plot_forcast())
+                st.pyplot(pf.plot_forecast())
                 st.pyplot(pf.plot_component())
+                st.write("RMSE:")
+                st.write(rmse)
+                st.write("MAPE")
+                st.write(mape)
 
             if task_type == "Cluster":
                 st.write("Perform Clustering task with option:")
