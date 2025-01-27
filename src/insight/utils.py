@@ -498,8 +498,10 @@ def inf_proc(item):
 
 
 def descriptive_analysis(df):
-    num_des_analysis = df.describe().T
+    num_des_analysis = None
     cat_des_analysis = None
+    if len(df.select_dtypes(include=np.number).columns) != 0:
+        num_des_analysis = df.describe().T
     if len(df.select_dtypes(include=object).columns) != 0:
         cat_des_analysis = df.describe(include="object").T
     d_types = pd.DataFrame(df.dtypes, columns=["type"])

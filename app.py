@@ -47,8 +47,9 @@ if uploaded_file is not None:
         dups_percentage,
         u_cols,
     ) = utils.descriptive_analysis(df)
-    st.subheader("Numerical Description")
-    st.write(num_des_analysis)
+    if num_des_analysis is not None:
+        st.subheader("Numerical Description")
+        st.write(num_des_analysis)
     if cat_des_analysis is not None:
         st.subheader("Categorical Description")
         st.write(cat_des_analysis)
