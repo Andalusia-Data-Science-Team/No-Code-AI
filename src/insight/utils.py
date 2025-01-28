@@ -264,19 +264,25 @@ def inf_proc(item):
 
 
 def descriptive_analysis(df):
-    num_des_analysis= df.describe().T
-    if df.select_dtypes(include=['object']).shape[1] > 0:
-        cat_des_analysis = df.describe(include='object').T
-    else:
-        cat_des_analysis = pd.DataFrame()  # Create an empty DataFrame or handle appropriately
+    num_des_analysis = df.describe().T
+    cat_des_analysis = None
+    if len(df.select_dtypes(include=object).columns) != 0:
+        cat_des_analysis = df.describe(include="object").T
+    d_types = pd.DataFrame(df.dtypes, columns=["type"])
+    missing_percentage = pd.DataFrame(
+        (df.isna().sum() / len(df)) * 100, columns=["missing %"]
+    ).round(2)
+    dups_percentage = (len(df[df.duplicated()]) / len(df)) * 100
+    unq_percentage = unique_percentage(df)
 
-    cat_des_analysis = df.describe(include='object').T
-    d_types= pd.DataFrame(df.dtypes, columns= ['type'])
-    missing_percentage= pd.DataFrame((df.isna().sum() / len(df)) * 100, columns=['missing %']).round(2)
-    dups_percentage= (len(df[df.duplicated()]) / len(df)) *100
-    unq_percentage= unique_percentage(df)
-
-    return num_des_analysis, cat_des_analysis, d_types, missing_percentage, dups_percentage, unq_percentage
+    return (
+        num_des_analysis,
+        cat_des_analysis,
+        d_types,
+        missing_percentage,
+        dups_percentage,
+        unq_percentage,
+    )
 
 def outlier_inlier_plot(df):
     model = IsolationForest(contamination=0.05, random_state=0)
