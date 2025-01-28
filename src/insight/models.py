@@ -13,7 +13,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler, P
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from sklearn.metrics import accuracy_score, confusion_matrix, mean_squared_error, r2_score, silhouette_score
+from sklearn.metrics import accuracy_score,precision_score,recall_score,f1_score, confusion_matrix, mean_squared_error, r2_score, silhouette_score
 
 from sklearn.linear_model import LogisticRegression, LinearRegression, ElasticNet, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
@@ -298,8 +298,23 @@ class Model:
 
         cm = confusion_matrix(y_true, y_pred)
         accuracy = accuracy_score(y_true, y_pred)
+        # recall = recall_score(y_true, y_pred,pos_label=self.label_encoder.inverse_transform([1]))
+        # perc = precision_score(y_true, y_pred,pos_label=self.label_encoder.inverse_transform([1]))
+        # f1 = f1_score(y_true,y_pred,pos_label=self.label_encoder.inverse_transform([1]))
 
-        return cm, accuracy
+        metrics_dict = {
+            'cm':cm,
+            'accuracy':accuracy,
+            # 'recall':recall,
+            # 'precision':perc,
+            # 'f1':f1
+        }
+
+
+
+        #return cm, accuracy
+        # return the whole dict
+        return metrics_dict
     
     def reg_metrics(self, X, y_true):
         """
@@ -352,15 +367,17 @@ def model(X_train= None, X_test= None, y_train= None, y_test= None, cfg= None):
 
     if cfg['task_type'] == "Classification":
         # p= _model.predict_prob(X_test)
-        cm, acc= _model.cls_metrics(X_test, y_test)
-        return acc, cm
+        #cm, acc= _model.cls_metrics(X_test, y_test)
+        metrics_dict = _model.cls_metrics(X_test, y_test)
+        return metrics_dict
 
     elif cfg['task_type'] == "Regression":
         mse, r2= _model.reg_metrics(X_test, y_test)
         return mse, r2
     
     else:
-        return _model.cluster_metrics(X_train)
+        return None
+        # return _model.cluster_metrics(X_train)
 
 def inference(X, proba= False):
     try:
