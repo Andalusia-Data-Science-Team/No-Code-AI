@@ -44,7 +44,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         train_size = int(len(feature_df) * self.f_period)
 
         self.train_df = feature_df.iloc[:train_size]
-        self.test_df = feature_df.iloc[-self.f_period :]
+        self.test_df = feature_df.iloc[-self.f_period:]
 
         # feature_df.set_index('ds', inplace= True)
         df_mod = self.feature_eng(self.train_df[["ds", "y"]])
@@ -147,7 +147,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         Make predictions, calculate and return error evaluation metrics: RMSE and MAPE.
         """
         target = self.test_df[: self.f_period]["y"]
-        pred = self.forecast["yhat"][-self.f_period :]
+        pred = self.forecast["yhat"][-self.f_period:]
 
         rmse = root_mean_squared_error(target, pred)
         mape = mean_absolute_percentage_error(target, pred) * 100
