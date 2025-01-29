@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import root_mean_squared_error, mean_absolute_percentage_error
@@ -39,30 +40,27 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         if not pd.api.types.is_datetime64_any_dtype(df[self.date_col]):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
-        feature_df = self.create_features(df, self.selected_cols)
+        feature_df = self.create_features(df, self.selected_cols)  # Create lag_1 feature and other columns if any selected
 
         train_size = int(len(feature_df) * self.f_period)
-
         self.train_df = feature_df.iloc[:train_size]
         self.test_df = feature_df.iloc[-self.f_period:]
 
-        # feature_df.set_index('ds', inplace= True)
-        df_mod = self.feature_eng(self.train_df[["ds", "y"]])
+        df_mod = self.feature_eng(self.train_df[["ds", "y"]])  # Create date features
 
         self.m = Prophet(**self.prophet_params)
+
         feat_ls = [i for i in df_mod.columns if i not in ["ds", "y"]]
         for f in feat_ls:
             self.m.add_regressor(f)
 
         self.m.fit(df_mod)
 
-        future = self.m.make_future_dataframe(periods=self.f_period, freq=self.freq)
-        self.future_preds = self.feature_eng(future)
-
         return self
 
     def transform(self, X=None):
-        self.forecast = self.m.predict(self.future_preds)
+        
+        # self.forecast = self.m.predict(self.future_preds)
         self.calculate_errors()
         return self
 
@@ -71,9 +69,9 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         prophet_df = df_selected.sort_values(by="ds").reset_index(drop=True)
         self.display_df = prophet_df.copy()
 
-        prophet_df["close_diff"] = prophet_df.shift(1)["y"]
-        prophet_df["close_change"] = prophet_df["y"] - prophet_df["close_diff"]
-        prophet_df["close_change"].fillna(0, inplace=True)
+        prophet_df["diff"] = prophet_df.shift(1)["y"]
+        prophet_df["lag_1"] = prophet_df["y"] - prophet_df["diff"]
+        prophet_df["lag_1"].fillna(0, inplace=True)
 
         rows = []
         for _, row in tqdm(prophet_df.iterrows(), total=prophet_df.shape[0]):
@@ -82,7 +80,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
                 day_of_month=row.ds.day,
                 week_of_year=row.ds.week,
                 month=row.ds.month,
-                close_change=row.close_change,
+                lag_1=row.lag_1,
                 y=row.y,
                 ds=row.ds,
             )
@@ -94,7 +92,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         selected_columns = [
             sel_col
             for sel_col in selected_columns
-            if sel_col not in ["ds", "close_change", "y"]
+            if sel_col not in ["ds", "lag_1", "y"]
         ]
 
         selected_columns = selected_columns
@@ -144,7 +142,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
     def calculate_errors(self):
         """
-        Make predictions, calculate and return error evaluation metrics: RMSE and MAPE.
+        Make predictions on test set, calculate and return error evaluation metrics: RMSE and MAPE.
         """
         target = self.test_df[: self.f_period]["y"]
         pred = self.forecast["yhat"][-self.f_period:]
@@ -153,3 +151,10 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         mape = mean_absolute_percentage_error(target, pred) * 100
 
         return rmse, mape
+
+    def predict(self):
+        future_df = self.m.make_future_dataframe(self.f_period, self.freq)
+        future_df = self.create_features(future_df, self.selected_cols)
+        future_df = self.feature_eng(future_df)
+        predictions = self.m.predict(future_df)["yhat"]
+        return np.array(predictions)

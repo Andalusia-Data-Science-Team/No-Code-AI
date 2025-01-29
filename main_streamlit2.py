@@ -430,12 +430,15 @@ if uploaded_file:
     )
     DF = back_DF.drop(selected_options, axis=1)
 
-    validation_size = st.slider(
-        "📊 Select Validation Size (%) : recommended value: 20% ",
-        min_value=1,
-        max_value=100,
-        value=20,
-    )
+    if task_type == "Classification" or task_type == "Regression":
+        validation_size = st.slider(
+            "📊 Select Validation Size (%) : recommended value: 20% ",
+            min_value=1,
+            max_value=100,
+            value=20,
+        )
+    else:
+        validation_size = 0
 
     # Task-Specific Configuration
     if task_type == "Classification":
@@ -538,46 +541,8 @@ if uploaded_file:
             }
 
             ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
-
             ts_kw["target_col"] = target
-
-            # add options for seasonality
-            # Configure the seasonality mode
-            seasonality_mode = st.radio(
-                "Seasonality Mode",
-                options=["additive", "multiplicative"],
-                help="Choose whether seasonality should be additive or multiplicative.",
-            )
-            yearly_seasonality = translate_seasonality_option(
-                st.selectbox(
-                    "Yearly Seasonality",
-                    options=["Auto", "True", "False"],
-                    help="Enable, disable, or let the model automatically handle yearly seasonality.",
-                )
-            )
-
-            weekly_seasonality = translate_seasonality_option(
-                st.selectbox(
-                    "Weekly Seasonality",
-                    options=["Auto", "True", "False"],
-                    help="Enable, disable, or let the model automatically handle weekly seasonality.",
-                )
-            )
-
-            daily_seasonality = translate_seasonality_option(
-                st.selectbox(
-                    "Daily Seasonality",
-                    options=["Auto", "True", "False"],
-                    help="Enable, disable, or let the model automatically handle daily seasonality.",
-                )
-            )
-
-            ts_kw["prophet_params"] = {
-                "yearly_seasonality": yearly_seasonality,
-                "weekly_seasonality": weekly_seasonality,
-                "daily_seasonality": weekly_seasonality,
-                "seasonality_mode": seasonality_mode,
-            }
+            ts_kw["prophet_params"] = {}
             ts_kw["selected_cols"] = {}
             # Create a select box to choose frequency
             selected_freq_label = st.selectbox(
@@ -587,7 +552,7 @@ if uploaded_file:
                 selected_freq_label
             ]  # Get corresponding frequency value
             num_of_points = st.number_input(
-                "Select how many points to forecast", value=1
+                f"Select how many {selected_freq_label.lower()} to forecast", value=1
             )
             ts_kw["freq"] = selected_freq
             ts_kw["f_period"] = int(num_of_points)
@@ -640,36 +605,34 @@ if uploaded_file:
             ts_df = utils.process_data(
                 DF, cfg, target, task_type, validation_size, all=True
             )
-            pf, rmse, mape = model(ts_df, cfg=cfg)
-            st.write("RMSE:")
-            st.write(rmse)
-            st.write("MAPE")
-            st.write(mape)
+            pf = model(ts_df, cfg=cfg)
+            rmse, mape = pf.calculate_errors()
+            st.write(f"RMSE: {rmse}")
+            st.write(f"MAPE: {mape}")
 
-            # st.plotly_chart(pf.slide_display())
-            # st.pyplot(pf.plot_forecast())
-            # st.pyplot(pf.plot_component())
             # Constrain Plotly Slide Display
-            # plotly_fig = pf.slide_display()
-            # plotly_fig.update_layout(
-            #     width=600,  # Adjust width
-            #     height=300  # Adjust height
-            # )
-            # st.plotly_chart(plotly_fig, use_container_width=True)
+            plotly_fig = pf.slide_display()
+            plotly_fig.update_layout(
+                width=600,  # Adjust width
+                height=300  # Adjust height
+            )
+            st.plotly_chart(plotly_fig, use_container_width=True)
 
             # Constrain Matplotlib Forecast Plot
-            # forecast_fig = pf.plot_forecast()
+            forecast_fig = pf.plot_forecast()
 
-            # forecast_fig.set_size_inches(10, 3)  # Adjust size
-            # st.plotly_chart(
-            #     forecast_fig,
-            #     use_container_width=True,
-            # )
+            forecast_fig.set_size_inches(10, 3)  # Adjust size
+            st.plotly_chart(
+                forecast_fig,
+                use_container_width=True,
+            )
 
             # Constrain Matplotlib Component Plot
-            # component_fig = pf.plot_component()
-            # component_fig.set_size_inches(10, 3)  # Adjust size
-            # st.pyplot(component_fig)
+            component_fig = pf.plot_component()
+            component_fig.set_size_inches(10, 3)  # Adjust size
+            st.pyplot(component_fig)
+
+            st.dataframe(pf.inference())
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")

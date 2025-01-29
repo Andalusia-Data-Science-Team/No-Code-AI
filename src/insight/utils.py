@@ -425,7 +425,7 @@ def process_data(_df, cfg, target, task_type, split_value, all=False):
             )
             _DF = missing(_DF, cfg["clean"])
 
-    if all:
+    if all:  # Not to split data when doing clustering or time series
         return _DF
 
     X_train, X_test, y_train, y_test = handle(_DF, target, split_value, task_type)

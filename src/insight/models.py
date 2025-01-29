@@ -192,7 +192,7 @@ class Model:
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
-        if grid == True and len(model_kws) != 0:
+        if grid is True and len(model_kws) != 0:
             warnings.warn(
                 "Can't use grid search with predefined model kwargs, setting kwargs to None..."
             )
