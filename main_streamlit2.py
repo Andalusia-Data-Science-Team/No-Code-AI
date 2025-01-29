@@ -627,12 +627,9 @@ if uploaded_file:
                 use_container_width=True,
             )
 
-            # Constrain Matplotlib Component Plot
-            component_fig = pf.plot_component()
-            component_fig.set_size_inches(10, 3)  # Adjust size
-            st.pyplot(component_fig)
+            st.pyplot(pf.plot_component())
 
-            st.dataframe(pf.inference())
+            # st.dataframe(pf.inference())
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")
