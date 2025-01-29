@@ -90,10 +90,13 @@ if uploaded_file:
         These metrics help identify trends, anomalies, and overall data distribution.
         """
         )
-        st.dataframe(
-            num_desc.style.format(precision=2).background_gradient(cmap="coolwarm"),
-            use_container_width=True,
-        )
+        if num_desc is not None:
+            st.dataframe(
+                num_desc.style.format(precision=2).background_gradient(cmap="coolwarm"),
+                use_container_width=True,
+            )
+        else:
+            st.write("The uploaded file doesn't conatin numerical data")
 
     # Categorical Description
     with st.expander("Categorical Description"):
@@ -405,10 +408,16 @@ if uploaded_file:
 
     back_DF = df.copy()
     cols = back_DF.columns
+    # To show only numerical columns when doing regression or time series forecasting
+    if task_type == "Time" or task_type == "Regression":
+        target_col = back_DF.select_dtypes(include=np.number).columns
+    else:
+        target_col = cols
+
     target = (
         st.selectbox(
             "🎯 Select Target Variable",
-            cols,
+            target_col,
             help="Choose the column you want to predict.",
         )
         if task_type != "Cluster"
