@@ -63,9 +63,9 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return self
 
     def create_features(self, df: pd.DataFrame, selected_columns):
-        df = df.sort_values(by=self.date_col).reset_index(drop=True)
         self.display_df = df.copy()
-        prophet_df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
+        df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
+        prophet_df = df.sort_values(by="ds").reset_index(drop=True)
 
         rows = []
         for _, row in tqdm(prophet_df.iterrows(), total=prophet_df.shape[0]):
@@ -104,6 +104,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return data
 
     def slide_display(self):
+        self.display_df = self.display_df.sort_values(by=self.date_col).reset_index(drop=True)
         fig = px.line(self.display_df, x=self.date_col, y=self.target_col, title="Raw Time Series Data")
 
         # slider
@@ -143,8 +144,12 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return rmse, mape
 
     def inference(self):
-        future_df = self.m.make_future_dataframe(self.f_period, self.freq)
+        start_date = self.test_df["ds"].max() + pd.Timedelta(1, self.freq)
+        end_date = start_date + pd.Timedelta(self.f_period-1, self.freq)
+        future_df = pd.DataFrame({"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)})
+        future_df["y"] = np.nan
         future_df = self.create_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
-        predictions = self.m.predict(future_df)["yhat"]
-        return np.array(predictions)
+        predictions = self.m.predict(future_df)
+
+        return predictions[["ds", "yhat"]].rename(columns={"ds": self.date_col, "yhat": self.target_col})

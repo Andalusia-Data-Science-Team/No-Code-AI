@@ -629,7 +629,7 @@ if uploaded_file:
 
             st.pyplot(pf.plot_component())
 
-            # st.dataframe(pf.inference())
+            st.dataframe(pf.inference())
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")
