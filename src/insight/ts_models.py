@@ -41,18 +41,11 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
         feature_df = self.create_features(df, self.selected_cols)  # Create lag_1 feature and other columns if any selected
-        feature_df = self.feature_eng(feature_df[["ds", "y"]])  # Create date features
-
-        # train_size = int(len(feature_df) * self.f_period)
-        # self.train_df = feature_df.iloc[:train_size]
-        # self.test_df = feature_df.iloc[-self.f_period:]
+        feature_df = self.create_date_features(feature_df[["ds", "y"]])  # Create date features
 
         train_size = len(feature_df) - self.f_period
         train_df = feature_df.iloc[:train_size]
         self.test_df = feature_df.iloc[-self.f_period:]
-
-        # self.test_df = self.feature_eng(self.test_df[["ds", "y"]])
-        # df_mod = self.feature_eng(self.train_df[["ds", "y"]])  # Create date features
 
         self.m = Prophet(**self.prophet_params)
 
@@ -62,9 +55,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
         self.m.fit(train_df)
 
-        # future = self.m.make_future_dataframe(periods=self.f_period, freq=self.freq)
-        # self.future_preds = self.feature_eng(future)
-
         return self
 
     def transform(self, X=None):
@@ -73,13 +63,9 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return self
 
     def create_features(self, df: pd.DataFrame, selected_columns):
-        df_selected = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
-        prophet_df = df_selected.sort_values(by="ds").reset_index(drop=True)
-        self.display_df = prophet_df.copy()
-
-        prophet_df["diff"] = prophet_df.shift(1)["y"]
-        prophet_df["lag_1"] = prophet_df["y"] - prophet_df["diff"]
-        prophet_df["lag_1"].fillna(0, inplace=True)
+        df = df.sort_values(by=self.date_col).reset_index(drop=True)
+        self.display_df = df.copy()
+        prophet_df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
 
         rows = []
         for _, row in tqdm(prophet_df.iterrows(), total=prophet_df.shape[0]):
@@ -88,7 +74,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
                 day_of_month=row.ds.day,
                 week_of_year=row.ds.week,
                 month=row.ds.month,
-                lag_1=row.lag_1,
                 y=row.y,
                 ds=row.ds,
             )
@@ -100,7 +85,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         selected_columns = [
             sel_col
             for sel_col in selected_columns
-            if sel_col not in ["ds", "lag_1", "y"]
+            if sel_col not in ["ds", "y"]
         ]
 
         selected_columns = selected_columns
@@ -108,20 +93,18 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
         return pd.concat([prophet_df, _df], axis=1)
 
-    def feature_eng(self, data):
+    def create_date_features(self, data):
         data["quarter"] = data["ds"].dt.quarter
         data["month"] = data["ds"].dt.month
         data["hour"] = data["ds"].dt.hour
         data["dayofmonth"] = data["ds"].dt.day
-
         data["daysinmonth"] = data["ds"].dt.daysinmonth
         data["dayofyear"] = data["ds"].dt.dayofyear
 
         return data
 
     def slide_display(self):
-        plt_df = self.display_df.copy()
-        fig = px.line(plt_df, x="ds", y="y", title="Raw Time Series Data")
+        fig = px.line(self.display_df, x=self.date_col, y=self.target_col, title="Raw Time Series Data")
 
         # slider
         fig.update_xaxes(
@@ -153,7 +136,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         Make predictions on test set, calculate and return error evaluation metrics: RMSE and MAPE.
         """
         target = self.test_df[: self.f_period]["y"]
-        # pred = self.m.predict(self.test_df)["yhat"]
 
         rmse = root_mean_squared_error(target, self.forecasts["yhat"])
         mape = mean_absolute_percentage_error(target, self.forecasts["yhat"]) * 100
@@ -163,6 +145,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
     def inference(self):
         future_df = self.m.make_future_dataframe(self.f_period, self.freq)
         future_df = self.create_features(future_df, self.selected_cols)
-        future_df = self.feature_eng(future_df)
+        future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)["yhat"]
         return np.array(predictions)
