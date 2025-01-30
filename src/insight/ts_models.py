@@ -40,8 +40,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         if not pd.api.types.is_datetime64_any_dtype(df[self.date_col]):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
-        feature_df = self.create_features(df, self.selected_cols)  # Create lag_1 feature and other columns if any selected
-        feature_df = self.create_date_features(feature_df[["ds", "y"]])  # Create date features
+        feature_df = self.add_features(df, self.selected_cols)
+        feature_df = self.create_date_features(feature_df[["ds", "y"]])
 
         train_size = len(feature_df) - self.f_period
         train_df = feature_df.iloc[:train_size]
@@ -62,7 +62,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.calculate_errors()
         return self
 
-    def create_features(self, df: pd.DataFrame, selected_columns):
+    def add_features(self, df: pd.DataFrame, selected_columns):
         self.display_df = df.copy()
         df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
         prophet_df = df.sort_values(by="ds").reset_index(drop=True)
@@ -80,15 +80,16 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
             rows.append(row_data)
         _df = pd.DataFrame(rows)
+
         selected_columns = selected_columns or prophet_df.columns.tolist()
 
         selected_columns = [
             sel_col
             for sel_col in selected_columns
-            if sel_col not in ["ds", "y"]
+            if sel_col not in ["ds", "y", self.date_col, self.target_col]
         ]
 
-        selected_columns = selected_columns
+        # selected_columns = selected_columns
         prophet_df = prophet_df[selected_columns]
 
         return pd.concat([prophet_df, _df], axis=1)
@@ -148,7 +149,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         end_date = start_date + pd.Timedelta(self.f_period-1, self.freq)
         future_df = pd.DataFrame({"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)})
         future_df["y"] = np.nan
-        future_df = self.create_features(future_df, self.selected_cols)
+        future_df = self.add_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)
 

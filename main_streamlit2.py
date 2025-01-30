@@ -543,7 +543,7 @@ if uploaded_file:
             ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
             ts_kw["target_col"] = target
             ts_kw["prophet_params"] = {}
-            ts_kw["selected_cols"] = {}
+            ts_kw["selected_cols"] = {}  # DF.columns.tolist()
             # Create a select box to choose frequency
             selected_freq_label = st.selectbox(
                 "Select forecast frequency:", options=freq_options.keys()
