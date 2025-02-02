@@ -645,7 +645,7 @@ if uploaded_file:
             # Constrain Matplotlib Predictions Plot
             predictions_fig = pf.plot_predictions(forecasts)
             predictions_fig.update_layout(
-                width=600, height=300  # Adjust width  # Adjust height
+                width=600, height=300  # Adjust width and height
             )
             st.plotly_chart(predictions_fig, use_container_width=True)
 
