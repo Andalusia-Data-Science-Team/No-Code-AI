@@ -188,14 +188,15 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
         return rmse, mape
 
-    def inference(self):
+    def inference(self, test_df=None):
         start_date = self.test_df["ds"].max() + pd.Timedelta(1, self.freq)
         end_date = start_date + pd.Timedelta(self.f_period - 1, self.freq)
         future_df = pd.DataFrame(
             {"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)}
         )
         future_df["y"] = np.nan
-
+        # if test_df is not None:
+        #     future_df = pd.concat([future_df, test_df], axis=1)
         future_df = self.add_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)

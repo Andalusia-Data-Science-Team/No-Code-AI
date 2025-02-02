@@ -26,7 +26,7 @@ def translate_seasonality_option(option):
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
 
 # File Upload Section
-st.markdown("### Step 1: Upload Training  Data")
+st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
     "Upload a CSV, Excel,Parquet, or Pickle file",
     type=["csv", "xls", "xlsx", "pkl", "parquet"],
@@ -630,9 +630,11 @@ if uploaded_file:
                     """
                 - **Trend Plot**: Represents the overall pattern and long-term movement in the data ignoring short-term fluctuations.
                 If your data has an increasing or decreasing pattern, this plot will show a rising or falling trend.
+                A shaded blue area may be found representing the uncertainty interval, which widens over time since future predictions become more uncertain.
                 - **Weekly Seasonality Plot**: Shows how values vary across different days of the week.
                 The values on the Y-axis represent the relative effect of the seasonality component on the forecasted values
                 (e.g., negative values indicate a decrease from the baseline on this weekday and vice versa).
+                - **Daily Seasonality Plot**: Shows how values vary across different hours of the day.
                 - **Yearly Seasonality Plot**: Shows how values vary across different months of the year.
                 If the dataset doesn't cover a full year, the yearly seasonality plot may not be found.
                 - **Extra Regressors Plot**: Shows how external variables impact the forecast.
@@ -648,6 +650,25 @@ if uploaded_file:
                 width=600, height=300  # Adjust width and height
             )
             st.plotly_chart(predictions_fig, use_container_width=True)
+
+            # For multivariate inference
+            # st.markdown("### Upload Inference Data")
+            # uploaded_file = st.file_uploader(
+            #     "Upload a CSV, Excel, or Parquet file",
+            #     type=["csv", "xls", "xlsx", "parquet"],
+            # )
+            # if uploaded_file:
+            #     # Handle file upload
+            #     file_extension = uploaded_file.name.split(".")[-1]
+            #     if file_extension == "csv":
+            #         test_df = pd.read_csv(uploaded_file)
+            #     elif file_extension in ["xls", "xlsx"]:
+            #         test_df = pd.read_excel(uploaded_file)
+            #     elif file_extension == "parquet":
+            #         test_df = pd.read_parquet(uploaded_file)
+            #     print("file uploaded")
+            #     forecasts = pf.inference(test_df)
+            #     st.dataframe(forecasts)
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")
