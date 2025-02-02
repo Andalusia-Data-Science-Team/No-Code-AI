@@ -1,10 +1,12 @@
 import pandas as pd
 import numpy as np
+import math
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import root_mean_squared_error, mean_absolute_percentage_error
 
 import plotly.express as px
+import plotly.graph_objects as go
 
 from tqdm import tqdm
 
@@ -19,6 +21,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         target_col,
         freq,
         f_period,
+        validation_size,
         prophet_params=None,
         selected_cols=None,
     ):
@@ -29,6 +32,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.selected_cols = selected_cols
         self.freq = freq
         self.f_period = f_period
+        self.validation = validation_size
 
     def fit(self, X, y=None):
 
@@ -40,12 +44,16 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         if not pd.api.types.is_datetime64_any_dtype(df[self.date_col]):
             df[self.date_col] = pd.to_datetime(df[self.date_col])
 
-        feature_df = self.add_features(df, self.selected_cols)
-        feature_df = self.create_date_features(feature_df[["ds", "y"]])
+        self.display_df = df.copy()
+        df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
+        prophet_df = df.sort_values(by="ds").reset_index(drop=True)
 
-        train_size = len(feature_df) - self.f_period
+        feature_df = self.add_features(prophet_df, self.selected_cols)
+        feature_df = self.create_date_features(feature_df)
+
+        train_size = math.ceil(len(df) * (1 - self.validation))
         train_df = feature_df.iloc[:train_size]
-        self.test_df = feature_df.iloc[-self.f_period:]
+        self.test_df = feature_df.iloc[train_size:]
 
         self.m = Prophet(**self.prophet_params)
 
@@ -62,10 +70,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.calculate_errors()
         return self
 
-    def add_features(self, df: pd.DataFrame, selected_columns):
-        self.display_df = df.copy()
-        df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
-        prophet_df = df.sort_values(by="ds").reset_index(drop=True)
+    def add_features(self, prophet_df: pd.DataFrame, selected_columns):
 
         rows = []
         for _, row in tqdm(prophet_df.iterrows(), total=prophet_df.shape[0]):
@@ -89,7 +94,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             if sel_col not in ["ds", "y", self.date_col, self.target_col]
         ]
 
-        # selected_columns = selected_columns
         prophet_df = prophet_df[selected_columns]
 
         return pd.concat([prophet_df, _df], axis=1)
@@ -105,8 +109,15 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return data
 
     def slide_display(self):
-        self.display_df = self.display_df.sort_values(by=self.date_col).reset_index(drop=True)
-        fig = px.line(self.display_df, x=self.date_col, y=self.target_col, title="Raw Time Series Data")
+        self.display_df = self.display_df.sort_values(by=self.date_col).reset_index(
+            drop=True
+        )
+        fig = px.line(
+            self.display_df,
+            x=self.date_col,
+            y=self.target_col,
+            title="Raw Time Series Data",
+        )
 
         # slider
         fig.update_xaxes(
@@ -127,8 +138,41 @@ class ProphetModel(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None):
         return self.fit(X, y).transform(X)
 
-    def plot_forecast(self):
+    def prophet_plot_forecast(self):
         return self.m.plot(self.forecasts)
+
+    def plot_test_with_actual(self):
+        fig = go.Figure()
+        self.display_df = self.display_df[[self.date_col, self.target_col]]
+
+        # Actual values as a line
+        fig.add_trace(
+            go.Scatter(
+                x=self.display_df[self.date_col],
+                y=self.display_df[self.target_col],
+                mode="lines",
+                name="Actual",
+                line=dict(color="blue"),
+            )
+        )
+
+        # Forecasted values as a dashed line
+        fig.add_trace(
+            go.Scatter(
+                x=self.test_df["ds"],
+                y=self.forecasts["yhat"],
+                mode="lines",
+                name="Forecast",
+                line=dict(color="red", dash="dot"),
+            )
+        )
+
+        fig.update_layout(
+            title="Actual Data vs Forecasts for Validation Data",
+            xaxis_title=self.date_col,
+            yaxis_title=self.target_col,
+        )
+        return fig
 
     def plot_component(self):
         return self.m.plot_components(self.forecasts)
@@ -137,7 +181,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         """
         Make predictions on test set, calculate and return error evaluation metrics: RMSE and MAPE.
         """
-        target = self.test_df[: self.f_period]["y"]
+        target = self.test_df["y"]  # Actual values in test set
 
         rmse = root_mean_squared_error(target, self.forecasts["yhat"])
         mape = mean_absolute_percentage_error(target, self.forecasts["yhat"]) * 100
@@ -146,11 +190,46 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
     def inference(self):
         start_date = self.test_df["ds"].max() + pd.Timedelta(1, self.freq)
-        end_date = start_date + pd.Timedelta(self.f_period-1, self.freq)
-        future_df = pd.DataFrame({"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)})
+        end_date = start_date + pd.Timedelta(self.f_period - 1, self.freq)
+        future_df = pd.DataFrame(
+            {"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)}
+        )
         future_df["y"] = np.nan
+
         future_df = self.add_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)
 
-        return predictions[["ds", "yhat"]].rename(columns={"ds": self.date_col, "yhat": self.target_col})
+        return predictions[["ds", "yhat"]].rename(
+            columns={"ds": self.date_col, "yhat": self.target_col}
+        )
+
+    def plot_predictions(self, predictions):
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=self.display_df[self.date_col],
+                y=self.display_df[self.target_col],
+                mode="lines",
+                name="Actual",
+                line=dict(color="blue"),
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=predictions[self.date_col],
+                y=predictions[self.target_col],
+                mode="lines",
+                name="Forecast",
+                line=dict(color="red", dash="dot"),
+            )
+        )
+
+        fig.update_layout(
+            title="Actual Data and Forecasted Interval",
+            xaxis_title=self.date_col,
+            yaxis_title=self.target_col,
+        )
+        return fig

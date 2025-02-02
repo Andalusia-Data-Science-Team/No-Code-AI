@@ -430,7 +430,7 @@ if uploaded_file:
     )
     DF = back_DF.drop(selected_options, axis=1)
 
-    if task_type == "Classification" or task_type == "Regression":
+    if task_type != "Clustering":  # == "Classification" or task_type == "Regression"
         validation_size = st.slider(
             "📊 Select Validation Size (%) : recommended value: 20% ",
             min_value=1,
@@ -543,7 +543,7 @@ if uploaded_file:
             ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
             ts_kw["target_col"] = target
             ts_kw["prophet_params"] = {}
-            ts_kw["selected_cols"] = {}  # DF.columns.tolist()
+            ts_kw["selected_cols"] = DF.columns.tolist()  # {}
             # Create a select box to choose frequency
             selected_freq_label = st.selectbox(
                 "Select forecast frequency:", options=freq_options.keys()
@@ -556,6 +556,7 @@ if uploaded_file:
             )
             ts_kw["freq"] = selected_freq
             ts_kw["f_period"] = int(num_of_points)
+            ts_kw["validation_size"] = validation_size / 100
             cfg["ts_config"] = ts_kw
 
         # cfg['skew_fix'] = st.checkbox('Skew Fix')
@@ -610,26 +611,43 @@ if uploaded_file:
             st.write(f"RMSE: {rmse}")
             st.write(f"MAPE: {mape}")
 
-            # Constrain Plotly Slide Display
-            plotly_fig = pf.slide_display()
-            plotly_fig.update_layout(
-                width=600,  # Adjust width
-                height=300  # Adjust height
+            # Constrain Raw Data Plot
+            raw_fig = pf.slide_display()
+            raw_fig.update_layout(
+                width=600, height=300  # Adjust width and height
             )
-            st.plotly_chart(plotly_fig, use_container_width=True)
+            st.plotly_chart(raw_fig, use_container_width=True)
 
-            # Constrain Matplotlib Forecast Plot
-            forecast_fig = pf.plot_forecast()
-
-            forecast_fig.set_size_inches(10, 3)  # Adjust size
-            st.plotly_chart(
-                forecast_fig,
-                use_container_width=True,
+            # Constrain Matplotlib Validation Plot
+            forecast_fig = pf.plot_test_with_actual()
+            forecast_fig.update_layout(
+                width=600, height=300  # Adjust width and height
             )
+            st.plotly_chart(forecast_fig, use_container_width=True)
 
+            with st.expander("📈 Understanding Components Plots"):
+                st.write(
+                    """
+                - **Trend Plot**: Represents the overall pattern and long-term movement in the data ignoring short-term fluctuations.
+                If your data has an increasing or decreasing pattern, this plot will show a rising or falling trend.
+                - **Weekly Seasonality Plot**: Shows how values vary across different days of the week.
+                The values on the Y-axis represent the relative effect of the seasonality component on the forecasted values
+                (e.g., negative values indicate a decrease from the baseline on this weekday and vice versa).
+                - **Yearly Seasonality Plot**: Shows how values vary across different months of the year.
+                If the dataset doesn't cover a full year, the yearly seasonality plot may not be found.
+                - **Extra Regressors Plot**: Shows how external variables impact the forecast.
+                """
+                )
             st.pyplot(pf.plot_component())
 
-            st.dataframe(pf.inference())
+            forecasts = pf.inference()
+            st.dataframe(forecasts)
+            # Constrain Matplotlib Predictions Plot
+            predictions_fig = pf.plot_predictions(forecasts)
+            predictions_fig.update_layout(
+                width=600, height=300  # Adjust width  # Adjust height
+            )
+            st.plotly_chart(predictions_fig, use_container_width=True)
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")
@@ -761,6 +779,8 @@ if uploaded_file:
 
                 st.markdown("#### 📊 Predicted Cluster")
                 st.write(f"**Predicted Cluster:**  {preds}")
+
+            # elif task_type == "Time":
 
         except Exception as e:
             st.error(f"An error occurred during inference: {e}")
