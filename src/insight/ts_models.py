@@ -195,8 +195,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             {"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)}
         )
         future_df["y"] = np.nan
-        # if test_df is not None:
-        #     future_df = pd.concat([future_df, test_df], axis=1)
         future_df = self.add_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)
