@@ -33,7 +33,6 @@ uploaded_file = st.file_uploader(
 )
 
 # Seed Input
-# SEED = st.number_input("Enter a random seed value", value=42, help="Set a seed for reproducibility.")
 SEED = 42
 np.random.seed(SEED)
 
@@ -120,7 +119,6 @@ if uploaded_file:
     #     """)
     #     st.dataframe(d_types, use_container_width=True)
 
-    # Missing Data
     # Missing Data
     with st.expander("Missing Values (% per Column)"):
         st.write(
@@ -269,7 +267,7 @@ if uploaded_file:
 
     task_type = st.radio(
         "⚙️ Select Task Type",
-        ["Classification", "Regression", "Cluster", "Time"],
+        ["Classification", "Regression", "Time"],  # ["Classification", "Regression", "Cluster", "Time"]
         index=0,
         help="Select the task type",
     )
@@ -643,14 +641,12 @@ if uploaded_file:
                 )
             st.pyplot(pf.plot_component())
 
-            forecasts = pf.inference()
-            st.dataframe(forecasts)
+            st.session_state.ts_preds = pf.inference()
             # Constrain Matplotlib Predictions Plot
-            predictions_fig = pf.plot_predictions(forecasts)
-            predictions_fig.update_layout(
+            st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
+            st.session_state.predictions_fig.update_layout(
                 width=600, height=300  # Adjust width and height
             )
-            st.plotly_chart(predictions_fig, use_container_width=True)
 
             # For multivariate inference
             # st.markdown("### Upload Inference Data")
@@ -802,7 +798,9 @@ if uploaded_file:
                 st.markdown("#### 📊 Predicted Cluster")
                 st.write(f"**Predicted Cluster:**  {preds}")
 
-            # elif task_type == "Time":
+            elif task_type == "Time":
+                st.dataframe(st.session_state.ts_preds)
+                st.plotly_chart(st.session_state.predictions_fig, use_container_width=True)
 
         except Exception as e:
             st.error(f"An error occurred during inference: {e}")
