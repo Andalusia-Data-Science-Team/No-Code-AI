@@ -28,7 +28,7 @@ st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
 # File Upload Section
 st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
-    "Upload a CSV, Excel,Parquet, or Pickle file",
+    "Upload a CSV, Excel, Parquet, or Pickle file",
     type=["csv", "xls", "xlsx", "pkl", "parquet"],
 )
 
@@ -635,6 +635,7 @@ if uploaded_file:
                 The values on the Y-axis represent the relative effect of the seasonality component on the forecasted values
                 (e.g., negative values indicate a decrease from the baseline on this weekday and vice versa).
                 - **Daily Seasonality Plot**: Shows how values vary across different hours of the day.
+                If the dataset doesn't containt an hourly timestamp, the daily seasonality plot may not be found.
                 - **Yearly Seasonality Plot**: Shows how values vary across different months of the year.
                 If the dataset doesn't cover a full year, the yearly seasonality plot may not be found.
                 - **Extra Regressors Plot**: Shows how external variables impact the forecast.
