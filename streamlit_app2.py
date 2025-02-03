@@ -4,11 +4,15 @@ st.set_page_config(page_title="Business AI Tool", layout="wide")
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Home", "Upload Data", "Analyze Data", "Train Model", "Predictions"])
+page = st.sidebar.radio(
+    "Go to", ["Home", "Upload Data", "Analyze Data", "Train Model", "Predictions"]
+)
 
 if page == "Home":
     st.title("Welcome to the Business AI Tool")
-    st.write("This tool enables you to analyze data, train models, and make predictions with ease.")
+    st.write(
+        "This tool enables you to analyze data, train models, and make predictions with ease."
+    )
 elif page == "Upload Data":
     st.title("Upload Your Data")
     # Add upload functionality here
