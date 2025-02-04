@@ -135,9 +135,6 @@ class ProphetModel(BaseEstimator, TransformerMixin):
 
         return fig
 
-    # def fit_transform(self, X, y=None):
-    #     return self.fit(X, y).transform(X)
-
     def prophet_plot_forecast(self):
         return self.m.plot(self.forecasts)
 
