@@ -423,6 +423,8 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         print("Setting Prophet args")
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
+        with open("model.pkl", "wb") as f:
+            pickle.dump(pf, f)
         return pf
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
@@ -445,21 +447,22 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         # return _model.cluster_metrics(X_train)
 
 
-def inference(X, proba=False):
+def inference(X, cfg, proba=False):
     try:
         _model: Model
         with open("model.pkl", "rb") as f:
             _model = pickle.load(f)
-
-        if proba:
-            return _model.predict_prob(X)
-
-        return _model.pipeline.predict(X)
     except FileNotFoundError:
         print("Model file not found.")
-
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
+
+    if cfg["task_type"] == "Time":
+        return _model.inference(X)
+    elif cfg["task_type"] != "Time" and proba:
+        return _model.predict_prob(X)
+    else:
+        return _model.pipeline.predict(X)
 
 
 def get_corresponding_labels(y, encode=False):

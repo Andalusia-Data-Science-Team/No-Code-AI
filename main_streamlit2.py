@@ -7,21 +7,6 @@ from src.insight.models import model, inference
 import plotly.graph_objects as go
 import altair as alt
 
-
-def translate_seasonality_option(option):
-    if option == "Auto":
-        return "auto"  # Prophet's automatic determination
-    elif option == "True":
-        return True  # Enable seasonality
-    elif option == "False":
-        return False  # Disable seasonality
-    else:
-        raise ValueError("Invalid option for seasonality.")
-
-
-# Set page configuration
-# st.set_page_config(page_title="Business AI Tool", layout="wide")
-
 # Page Title
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
 
@@ -394,7 +379,7 @@ if uploaded_file:
         - What will the sales be next week?
         - How will electricity demand change throughout the day?
 
-        **Models**: Prophet, LSTM.
+        **Models**: Prophet.
         """
             )
         with col2:
@@ -641,29 +626,15 @@ if uploaded_file:
                 )
             st.pyplot(pf.plot_component())
 
-            st.session_state.ts_preds = pf.inference()
-            # Constrain Matplotlib Predictions Plot
-            st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
-            st.session_state.predictions_fig.update_layout(
-                width=600, height=300  # Adjust width and height
-            )
-
-            # For multivariate inference
-            # st.markdown("### Upload Inference Data")
-            # uploaded_file = st.file_uploader(
-            #     "Upload a CSV, Excel, or Parquet file",
-            #     type=["csv", "xls", "xlsx", "parquet"],
+            # # For Univariate inference
+            # st.session_state.ts_preds = pf.inference()
+            # # Constrain Matplotlib Predictions Plot
+            # st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
+            # st.session_state.predictions_fig.update_layout(
+            #     width=600, height=300  # Adjust width and height
             # )
-            # if uploaded_file:
-            #     # Handle file upload
-            #     file_extension = uploaded_file.name.split(".")[-1]
-            #     if file_extension == "csv":
-            #         test_df = pd.read_csv(uploaded_file)
-            #     elif file_extension in ["xls", "xlsx"]:
-            #         test_df = pd.read_excel(uploaded_file)
-            #     elif file_extension == "parquet":
-            #         test_df = pd.read_parquet(uploaded_file)
-            #     print("file uploaded")
+
+            # For Multivariate inference
             #     forecasts = pf.inference(test_df)
             #     st.dataframe(forecasts)
 
@@ -838,11 +809,22 @@ if uploaded_file:
                 st.stop()
 
             # Validate test data structure
-            if set(test_df.columns) != set(DF.columns) - {target}:
+            if set(test_df.columns) != set(DF.columns) - {target} and task_type != "Time":
                 st.error(
                     "❌ The columns in the test data must match the training data (excluding the target column)."
                 )
+                st.stop()
 
+            elif set(test_df.columns) != set(DF.columns) - {target, ts_kw["date_col"]} and task_type == "Time":
+                st.error(
+                    "❌ The columns in the test data must match the training data (excluding the target and date columns)."
+                )
+                st.stop()
+
+            elif len(test_df) != ts_kw["f_period"] and task_type == "Time":
+                st.error(
+                    "❌ The number of rows in the test data must match the selected number of points to forecast."
+                )
                 st.stop()
             else:
                 st.success("✅ Test data uploaded successfully!")
@@ -851,32 +833,38 @@ if uploaded_file:
 
                 # Run predictions
                 if st.button("🚀 Run Predictions"):
-                    X_test = (
-                        test_df.copy()
-                    )  # Ensure the test data does not include the target column
-                    predictions = inference(
-                        X_test
-                    )  # Replace this with your prediction function
+                    if task_type == "Time":
+                        # Only for multivariate
+                        predictions = inference(test_df, cfg)
+                        st.dataframe(predictions)
+                        # plot preds
+                    else:
+                        X_test = (
+                            test_df.copy()
+                        )  # Ensure the test data does not include the target column
+                        predictions = inference(
+                            X_test, cfg
+                        )  # Replace this with your prediction function
 
-                    test_df["Predictions"] = (
-                        predictions  # Append predictions to the test data
-                    )
-                    test_df["Predictions"] = test_df["Predictions"].apply(
-                        lambda x: max(x, 1)
-                    )
-                    st.success("✅ Predictions generated successfully!")
-                    st.write("Here is the test data with predictions:")
-                    st.dataframe(test_df)
+                        test_df["Predictions"] = (
+                            predictions  # Append predictions to the test data
+                        )
+                        test_df["Predictions"] = test_df["Predictions"].apply(
+                            lambda x: max(x, 1)
+                        )
+                        st.success("✅ Predictions generated successfully!")
+                        st.write("Here is the test data with predictions:")
+                        st.dataframe(test_df)
 
-                    # Download predictions
-                    st.markdown("### 📥 Download Predictions")
-                    csv = test_df.to_csv(index=False).encode("utf-8")
-                    st.download_button(
-                        label="Download Predictions as CSV",
-                        data=csv,
-                        file_name="predictions.csv",
-                        mime="text/csv",
-                    )
+                        # Download predictions
+                        st.markdown("### 📥 Download Predictions")
+                        csv = test_df.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="Download Predictions as CSV",
+                            data=csv,
+                            file_name="predictions.csv",
+                            mime="text/csv",
+                        )
 
         except Exception as e:
             st.error(f"An error occurred while processing the file: {e}")
