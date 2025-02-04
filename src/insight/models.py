@@ -5,7 +5,8 @@ from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransfo
 from .model_utils import grid_dict
 
 import pickle
-import pandas as pd, numpy as np
+import pandas as pd
+import numpy as np
 
 from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -21,13 +22,13 @@ from sklearn.pipeline import Pipeline
 
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
+    # precision_score,
+    # recall_score,
+    # f1_score,
     confusion_matrix,
     mean_squared_error,
     r2_score,
-    silhouette_score,
+    # silhouette_score,
 )
 
 from sklearn.linear_model import (
