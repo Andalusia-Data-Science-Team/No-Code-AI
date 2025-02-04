@@ -458,7 +458,9 @@ def inference(X, cfg, proba=False):
         print("Error loading the pickle model.")
 
     if cfg["task_type"] == "Time":
-        return _model.inference(X)
+        preds = _model.inference(X)
+        preds_plot = _model.plot_predictions(preds)
+        return preds, preds_plot
     elif cfg["task_type"] != "Time" and proba:
         return _model.predict_prob(X)
     else:
