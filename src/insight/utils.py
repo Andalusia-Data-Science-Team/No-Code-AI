@@ -22,7 +22,7 @@ import matplotlib.gridspec as gridspec
 from sklearn.metrics import silhouette_score
 from yellowbrick.cluster import SilhouetteVisualizer
 
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 import plotly.express as px
 import logging
 
@@ -32,8 +32,12 @@ user_logger.setLevel(logging.INFO)
 
 # Prevent adding multiple handlers
 if not user_logger.handlers:
-    handler = logging.FileHandler("logs/user_actions.log", mode="a")  # Create a file handler that directs log messages to a file
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Formatter defines how the log messages look
+    handler = logging.FileHandler(
+        "logs/user_actions.log", mode="a"
+    )  # Create a file handler that directs log messages to a file
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s"
+    )  # Formatter defines how the log messages look
     handler.setFormatter(formatter)  # Formats logs before saving them
     user_logger.addHandler(handler)  # Attach handler to the logger
 
@@ -1468,14 +1472,21 @@ def cluster_scatter_plot(df, x_col, y_col, cluster_col="cluster"):
     #     title="Cluster Scatter Plot",
     #     showlegend=True,
     # )
-    cluster_order = df[cluster_col].value_counts(normalize=True).sort_values(ascending=True)
+    cluster_order = (
+        df[cluster_col].value_counts(normalize=True).sort_values(ascending=True)
+    )
     # Create a scatter plot using Plotly Express
-    fig = px.scatter(df, x=x_col, y=y_col, color="cluster",
-                     labels={x_col: x_col, y_col: y_col},
-                     color_continuous_scale=px.colors.sequential.Plasma,
-                     category_orders={"cluster": cluster_order.to_dict()})
+    fig = px.scatter(
+        df,
+        x=x_col,
+        y=y_col,
+        color="cluster",
+        labels={x_col: x_col, y_col: y_col},
+        color_continuous_scale=px.colors.sequential.Plasma,
+        category_orders={"cluster": cluster_order.to_dict()},
+    )
 
     # Update marker size and edge color
-    fig.update_traces(marker=dict(size=12, line=dict(width=2, color='DarkSlateGrey')))
+    fig.update_traces(marker=dict(size=12, line=dict(width=2, color="DarkSlateGrey")))
 
     return fig

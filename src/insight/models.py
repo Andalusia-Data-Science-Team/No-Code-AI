@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import warnings
 
-from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransformer
+from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransformer, log_user_action
 from .model_utils import grid_dict
 
 import pickle
@@ -53,7 +53,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.cluster import KMeans, DBSCAN
-from sklearn.mixture import  GaussianMixture
+from sklearn.mixture import GaussianMixture
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
@@ -85,7 +85,7 @@ models_dict = {
     "DecisionTree_cls": DecisionTreeClassifier(),
     "kmeans": KMeans(),
     "dbscan": DBSCAN(),
-    "gmm" : GaussianMixture()
+    "gmm": GaussianMixture(),
 }
 
 normilizers = {
@@ -432,9 +432,11 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         print("Setting Prophet args")
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
+        rmse, mape = pf.calculate_errors()
         with open("model.pkl", "wb") as f:
             pickle.dump(pf, f)  # Saving trained model
-        return pf
+        log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape))
+        return pf, (rmse, mape)
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
@@ -445,10 +447,12 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         # p= _model.predict_prob(X_test)
         # cm, acc= _model.cls_metrics(X_test, y_test)
         metrics_dict = _model.cls_metrics(X_test, y_test)
+        log_user_action("Classification Metrics (CM and Accuracy)", metrics_dict)
         return metrics_dict
 
     elif cfg["task_type"] == "Regression":
         mse, r2 = _model.reg_metrics(X_test, y_test)
+        log_user_action("Regression Metrics (MSE and R2)", (mse, r2))
         return mse, r2
 
     else:
@@ -461,14 +465,18 @@ def inference(X, cfg, proba=False):
         with open("model.pkl", "rb") as f:
             _model = pickle.load(f)
 
-        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        assert (
+            _model.set_model == cfg["alg"]
+        ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
     except FileNotFoundError:
         print("Model file not found.")
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
 
     if cfg["task_type"] == "Time":
-        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        assert (
+            _model.set_model == cfg["alg"]
+        ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
         preds = _model.inference(X)
         preds_plot = _model.plot_predictions(preds)
         return preds, preds_plot

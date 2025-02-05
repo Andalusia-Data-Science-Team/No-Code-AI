@@ -314,11 +314,11 @@ if uploaded_file:
                 st.write(
                     """
             **Use Case**: Predict a category or label (e.g., spam vs. non-spam, yes vs. no).
-    
+
             **Examples**:
             - Will a customer churn? (Yes/No)
             - What type of product is being purchased? (Category A, B, or C)
-    
+
             **Models**: SVC, Logistic Regression, Random Forest, XGBoost.
             """
                 )
@@ -336,11 +336,11 @@ if uploaded_file:
                 st.write(
                     """
             **Use Case**: Predict a continuous value (e.g., sales, stock prices, temperatures).
-    
+
             **Examples**:
             - What will next month's revenue be?
             - How much will a house sell for?
-    
+
             **Models**: Linear Regression, Ridge, Lasso, SVR, XGBoost.
             """
                 )
@@ -358,12 +358,12 @@ if uploaded_file:
                 st.write(
                     """
                 **Use Case**: Identify groups or clusters of similar data points without predefined labels.
-    
+
                 **Examples**:
                 - Segmenting customers based on purchase behaviors.
                 - Grouping similar products based on features.
                 - Detecting anomalies by identifying clusters of unexpected data points.
-    
+
                 **Models**: K-Means, Gaussian Mixture
                 """
                 )
@@ -380,11 +380,11 @@ if uploaded_file:
                 st.write(
                     """
             **Use Case**: Analyze patterns over time and predict future values (e.g., sales trends, stock prices, weather forecasting).
-    
+
             **Examples**:
             - What will the sales be next week?
             - How will electricity demand change throughout the day?
-    
+
             **Models**: Prophet
             """
                 )
@@ -412,7 +412,6 @@ if uploaded_file:
             if task_type != "Cluster"
             else None
         )
-
 
         if task_type != "Cluster":  # == "Classification" or task_type == "Regression"
             validation_size = st.slider(
@@ -549,24 +548,24 @@ if uploaded_file:
                 "Months": "M",
             }
 
-                ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
-                ts_kw["target_col"] = target
-                ts_kw["prophet_params"] = {}
-                ts_kw["selected_cols"] = DF.columns.tolist()  # {}
-                # Create a select box to choose frequency
-                selected_freq_label = st.selectbox(
-                    "Select forecast frequency:", options=freq_options.keys()
-                )
-                selected_freq = freq_options[
-                    selected_freq_label
-                ]  # Get corresponding frequency value
-                num_of_points = st.number_input(
-                    f"Select how many {selected_freq_label.lower()} to forecast", value=1
-                )
-                ts_kw["freq"] = selected_freq
-                ts_kw["f_period"] = int(num_of_points)
-                ts_kw["validation_size"] = validation_size / 100
-                cfg["ts_config"] = ts_kw
+            ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
+            ts_kw["target_col"] = target
+            ts_kw["prophet_params"] = {}
+            ts_kw["selected_cols"] = DF.columns.tolist()  # {}
+            # Create a select box to choose frequency
+            selected_freq_label = st.selectbox(
+                "Select forecast frequency:", options=freq_options.keys()
+            )
+            selected_freq = freq_options[
+                selected_freq_label
+            ]  # Get corresponding frequency value
+            num_of_points = st.number_input(
+                f"Select how many {selected_freq_label.lower()} to forecast", value=1
+            )
+            ts_kw["freq"] = selected_freq
+            ts_kw["f_period"] = int(num_of_points)
+            ts_kw["validation_size"] = validation_size / 100
+            cfg["ts_config"] = ts_kw
 
         cfg["apply_GridSearch"] = False
 
@@ -612,10 +611,9 @@ if uploaded_file:
             ts_df = utils.process_data(
                 DF, cfg, target, task_type, validation_size, selected_options, all=True
             )
-            pf = model(ts_df, cfg=cfg)
-            rmse, mape = pf.calculate_errors()
-            st.write(f"RMSE: {rmse}")
-            st.write(f"MAPE: {mape}")
+            pf, report = model(ts_df, cfg=cfg)
+            st.write(f"RMSE: {report[0]}")
+            st.write(f"MAPE: {report[1]}")
 
             # Raw Data Plot
             raw_fig = pf.slide_display()
@@ -625,23 +623,23 @@ if uploaded_file:
             forecast_fig = pf.plot_test_with_actual()
             st.plotly_chart(forecast_fig, use_container_width=True)
 
-                with st.expander("📈 Understanding Components Plots"):
-                    st.write(
-                        """
-                    - **Trend Plot**: Represents the overall pattern and long-term movement in the data ignoring short-term fluctuations.
-                    If your data has an increasing or decreasing pattern, this plot will show a rising or falling trend.
-                    A shaded blue area may be found representing the uncertainty interval, which widens over time since future predictions become more uncertain.
-                    - **Weekly Seasonality Plot**: Shows how values vary across different days of the week.
-                    The values on the Y-axis represent the relative effect of the seasonality component on the forecasted values
-                    (e.g., negative values indicate a decrease from the baseline on this weekday and vice versa).
-                    - **Daily Seasonality Plot**: Shows how values vary across different hours of the day.
-                    If the dataset doesn't containt an hourly timestamp, the daily seasonality plot may not be found.
-                    - **Yearly Seasonality Plot**: Shows how values vary across different months of the year.
-                    If the dataset doesn't cover a full year, the yearly seasonality plot may not be found.
-                    - **Extra Regressors Plot**: Shows how external variables impact the forecast.
+            with st.expander("📈 Understanding Components Plots"):
+                st.write(
                     """
-                    )
-                st.pyplot(pf.plot_component())
+                - **Trend Plot**: Represents the overall pattern and long-term movement in the data ignoring short-term fluctuations.
+                If your data has an increasing or decreasing pattern, this plot will show a rising or falling trend.
+                A shaded blue area may be found representing the uncertainty interval, which widens over time since future predictions become more uncertain.
+                - **Weekly Seasonality Plot**: Shows how values vary across different days of the week.
+                The values on the Y-axis represent the relative effect of the seasonality component on the forecasted values
+                (e.g., negative values indicate a decrease from the baseline on this weekday and vice versa).
+                - **Daily Seasonality Plot**: Shows how values vary across different hours of the day.
+                If the dataset doesn't containt an hourly timestamp, the daily seasonality plot may not be found.
+                - **Yearly Seasonality Plot**: Shows how values vary across different months of the year.
+                If the dataset doesn't cover a full year, the yearly seasonality plot may not be found.
+                - **Extra Regressors Plot**: Shows how external variables impact the forecast.
+                """
+                )
+            st.pyplot(pf.plot_component())
 
             # For Univariate inference
             if len(DF.columns) == 2:
@@ -663,21 +661,21 @@ if uploaded_file:
         )  # Ensure the test data does not include the target column
         predictions = inference(X_test)  # Replace this with your prediction function
 
-            cluster_df["cluster"] = predictions  # Append predictions to the test data
-            # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
-            st.success("✅ Predictions generated successfully!")
-            st.write("Here is the test data with predictions:")
-            st.dataframe(cluster_df)
+        cluster_df["cluster"] = predictions  # Append predictions to the test data
+        # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
+        st.success("✅ Predictions generated successfully!")
+        st.write("Here is the test data with predictions:")
+        st.dataframe(cluster_df)
 
-            x_col = st.selectbox("Choose X-axis", options=cluster_df.columns[:-1])
-            y_col = st.selectbox("Choose Y-axis", options=cluster_df.columns[:-1])
+        x_col = st.selectbox("Choose X-axis", options=cluster_df.columns[:-1])
+        y_col = st.selectbox("Choose Y-axis", options=cluster_df.columns[:-1])
 
-            # Only run plotting if both selections are made
-            if st.button("🚀 Plot  Clusters"):
-                cluster_plot = utils.cluster_scatter_plot(
-                    cluster_df, x_col, y_col, cluster_col="cluster"
-                )
-                st.write(cluster_plot)
+        # Only run plotting if both selections are made
+        if st.button("🚀 Plot  Clusters"):
+            cluster_plot = utils.cluster_scatter_plot(
+                cluster_df, x_col, y_col, cluster_col="cluster"
+            )
+            st.write(cluster_plot)
 
         download_preds(cluster_df)
         st.stop()
@@ -687,47 +685,47 @@ if uploaded_file:
         st.markdown("### 🔍 What If / Inference")
         st.write("""Provide input values to test your trained model interactively.""")
 
-            # Create an empty DataFrame for user inputs
-            inf_df = pd.DataFrame(columns=DF.columns)
+        # Create an empty DataFrame for user inputs
+        inf_df = pd.DataFrame(columns=DF.columns)
 
-            # Dynamic User Input Form
-            st.markdown("#### Provide Input Values for Prediction")
-            input_cols = [column for column in DF.columns if column != target]
-            for column in input_cols:
-                if d_types.loc[column].values[0] == "object":  # Categorical columns
-                    user_input = st.selectbox(
-                        f"Select a value for **{column}**:",
-                        options=DF[column].unique(),
-                        help=f"Choose a category for the column '{column}'.",
-                    )
-                else:  # Numeric columns
-                    user_input = st.text_input(
-                        f"Enter a value for **{column}**:",
-                        value=str(np.mean(DF[column])),
-                        help=f"Provide a numeric value for the column '{column}'.",
-                    )
-                    # Preprocess numeric input
-                    user_input = utils.inf_proc(user_input)
-                inf_df[column] = [user_input]
+        # Dynamic User Input Form
+        st.markdown("#### Provide Input Values for Prediction")
+        input_cols = [column for column in DF.columns if column != target]
+        for column in input_cols:
+            if d_types.loc[column].values[0] == "object":  # Categorical columns
+                user_input = st.selectbox(
+                    f"Select a value for **{column}**:",
+                    options=DF[column].unique(),
+                    help=f"Choose a category for the column '{column}'.",
+                )
+            else:  # Numeric columns
+                user_input = st.text_input(
+                    f"Enter a value for **{column}**:",
+                    value=str(np.mean(DF[column])),
+                    help=f"Provide a numeric value for the column '{column}'.",
+                )
+                # Preprocess numeric input
+                user_input = utils.inf_proc(user_input)
+            inf_df[column] = [user_input]
 
-            # Display the prepared input DataFrame
-            st.markdown("### 🛠 Prepared Inference Data")
-            st.dataframe(inf_df[input_cols], use_container_width=True)
+        # Display the prepared input DataFrame
+        st.markdown("### 🛠 Prepared Inference Data")
+        st.dataframe(inf_df[input_cols], use_container_width=True)
 
-            # Define classes (specific to classification tasks)
-            if task_type == "Classification":
-                st.markdown("#### Define Class Labels (Optional)")
-                try:
-                    # Attempt to define classes using target column
-                    classes = {
-                        label: idx for idx, label in enumerate(sorted(DF[target].unique()))
-                    }
-                    st.write(f"Classes defined from target column: {classes}")
-                except KeyError:
-                    classes = None
-                    st.warning(
-                        "Unable to define classes automatically. Check your data or model."
-                    )
+        # Define classes (specific to classification tasks)
+        if task_type == "Classification":
+            st.markdown("#### Define Class Labels (Optional)")
+            try:
+                # Attempt to define classes using target column
+                classes = {
+                    label: idx for idx, label in enumerate(sorted(DF[target].unique()))
+                }
+                st.write(f"Classes defined from target column: {classes}")
+            except KeyError:
+                classes = None
+                st.warning(
+                    "Unable to define classes automatically. Check your data or model."
+                )
 
     if (task_type == "Time" and len(DF.columns) == 2) or task_type != "Time":
         # Run Inference Button

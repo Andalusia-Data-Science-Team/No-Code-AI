@@ -172,7 +172,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             title="Actual Data vs Forecasts for Validation Data",
             xaxis_title=self.date_col,
             yaxis_title=self.target_col,
-            width=600, height=300,
+            width=600,
+            height=300,
         )
         return fig
 
@@ -234,6 +235,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             title="Actual Data and Forecasted Interval",
             xaxis_title=self.date_col,
             yaxis_title=self.target_col,
-            width=600, height=300,
+            width=600,
+            height=300,
         )
         return fig
