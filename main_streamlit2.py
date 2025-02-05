@@ -7,14 +7,26 @@ from src.insight.models import model, inference
 import plotly.graph_objects as go
 import altair as alt
 
+
+def download_preds(df):
+    st.markdown("### 📥 Download Predictions")
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Predictions as CSV",
+        data=csv,
+        file_name="predictions.csv",
+        mime="text/csv",
+    )
+
+
 # Page Title
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
 
 # File Upload Section
 st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
-    "Upload a CSV, Excel, Parquet, or Pickle file",
-    type=["csv", "xls", "xlsx", "pkl", "parquet"],
+    "Upload a CSV, Excel, or Parquet file",
+    type=["csv", "xls", "xlsx", "parquet"],
 )
 
 # Seed Input
@@ -26,20 +38,14 @@ if uploaded_file:
     file_extension = uploaded_file.name.split(".")[-1]
     if file_extension == "csv":
         df = pd.read_csv(uploaded_file)
+        # log_user_action("CSV STATUS: ", uploaded_file.name)
     elif file_extension in ["xls", "xlsx"]:
         df = pd.read_excel(uploaded_file)
-    elif file_extension == "pkl":
-        try:
-            _model = pickle.load(uploaded_file)
-            st.success("✅ Model file loaded successfully!")
-        except pickle.UnpicklingError:
-            st.error("❌ Invalid Pickle file. Please upload a valid file.")
-            st.stop()
     elif file_extension == "parquet":
         df = pd.read_parquet(uploaded_file)
     else:
         st.error(
-            "❌ Unsupported file type. Please upload a CSV, Excel, or Pickle file."
+            "❌ Unsupported file type. Please upload a CSV, Excel, or Parquet file."
         )
         st.stop()
 
@@ -492,7 +498,7 @@ if uploaded_file:
         cfg["pca"] = st.checkbox("Apply PCA")
         if cfg["pca"]:
             pca_data = utils.process_data(
-                back_DF, cfg, target, task_type, validation_size, all=True
+                back_DF, cfg, target, task_type, validation_size, selected_options, all=True
             )
             pca_fig, pca_comp = utils.PCA_visualization(pca_data)
             st.pyplot(pca_fig)
@@ -547,7 +553,7 @@ if uploaded_file:
         if task_type == "Classification":
             st.write("Perform classification task with option:")
             X_train, X_test, y_train, y_test = utils.process_data(
-                DF, cfg, target, task_type, validation_size
+                DF, cfg, target, task_type, validation_size, selected_options
             )
             report = model(X_train, X_test, y_train, y_test, cfg)
             # st.write("Accuracy:")
@@ -569,7 +575,7 @@ if uploaded_file:
         elif task_type == "Regression":
             st.write("Perform Regression task with option:")
             X_train, X_test, y_train, y_test = utils.process_data(
-                DF, cfg, target, task_type, validation_size
+                DF, cfg, target, task_type, validation_size, selected_options
             )
             report = model(X_train, X_test, y_train, y_test, cfg)
             st.write("MSE:")
@@ -580,25 +586,19 @@ if uploaded_file:
         elif task_type == "Time":
             st.write("Performing Time Series Analysis")
             ts_df = utils.process_data(
-                DF, cfg, target, task_type, validation_size, all=True
+                DF, cfg, target, task_type, validation_size, selected_options, all=True
             )
             pf = model(ts_df, cfg=cfg)
             rmse, mape = pf.calculate_errors()
             st.write(f"RMSE: {rmse}")
             st.write(f"MAPE: {mape}")
 
-            # Constrain Raw Data Plot
+            # Raw Data Plot
             raw_fig = pf.slide_display()
-            raw_fig.update_layout(
-                width=600, height=300  # Adjust width and height
-            )
             st.plotly_chart(raw_fig, use_container_width=True)
 
-            # Constrain Matplotlib Validation Plot
+            # Validation Data Plot
             forecast_fig = pf.plot_test_with_actual()
-            forecast_fig.update_layout(
-                width=600, height=300  # Adjust width and height
-            )
             st.plotly_chart(forecast_fig, use_container_width=True)
 
             with st.expander("📈 Understanding Components Plots"):
@@ -622,18 +622,15 @@ if uploaded_file:
             # For Univariate inference
             if len(DF.columns) == 2:
                 st.session_state.ts_preds = pf.inference()
-                # Constrain Matplotlib Predictions Plot
+                # Predicted Data Plot
                 st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
-                st.session_state.predictions_fig.update_layout(
-                    width=600, height=300  # Adjust width and height
-                )
 
         elif task_type == "Cluster":
             st.write("Perform Clustering task with option:")
 
     if task_type == "Cluster":
         cluster_df = utils.process_data(
-            DF, cfg, target, task_type, validation_size, all=True
+            DF, cfg, target, task_type, validation_size, selected_options, all=True
         )
         report = model(cluster_df, cfg=cfg)
         # st.pyplot(report)
@@ -658,15 +655,7 @@ if uploaded_file:
             )
             st.write(cluster_plot)
 
-        # Download predictions
-        st.markdown("### 📥 Download Predictions")
-        csv = cluster_df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Download Predictions as CSV",
-            data=csv,
-            file_name="predictions.csv",
-            mime="text/csv",
-        )
+        download_preds(cluster_df)
         st.stop()
 
     if task_type != "Time":
@@ -762,6 +751,7 @@ if uploaded_file:
                 elif task_type == "Time":
                     st.dataframe(st.session_state.ts_preds)
                     st.plotly_chart(st.session_state.predictions_fig, use_container_width=True)
+                    download_preds(st.session_state.ts_preds)
 
             except Exception as e:
                 st.error(f"An error occurred during inference: {e}")
@@ -827,12 +817,7 @@ if uploaded_file:
                     if st.button("🚀 Run Predictions"):
                         if task_type == "Time":
                             # Only for multivariate
-                            predictions, preds_plot = inference(test_df, cfg)
-                            st.dataframe(predictions)  # Prints Predictions Dataframe
-                            preds_plot.update_layout(
-                                width=600, height=300  # Adjust width and height
-                            )
-                            st.plotly_chart(preds_plot, use_container_width=True)
+                            test_df, preds_plot = inference(test_df, cfg)
                         else:
                             X_test = (
                                 test_df.copy()
@@ -847,19 +832,13 @@ if uploaded_file:
                             test_df["Predictions"] = test_df["Predictions"].apply(
                                 lambda x: max(x, 1)
                             )
-                            st.success("✅ Predictions generated successfully!")
-                            st.write("Here is the test data with predictions:")
-                            st.dataframe(test_df)
+                        st.success("✅ Predictions generated successfully!")
+                        st.write("Here is the test data with predictions:")
+                        st.dataframe(test_df)
+                        if task_type == "Time":
+                            st.plotly_chart(preds_plot, use_container_width=True)
 
-                            # Download predictions
-                            st.markdown("### 📥 Download Predictions")
-                            csv = test_df.to_csv(index=False).encode("utf-8")
-                            st.download_button(
-                                label="Download Predictions as CSV",
-                                data=csv,
-                                file_name="predictions.csv",
-                                mime="text/csv",
-                            )
+                        download_preds(test_df)
 
             except Exception as e:
                 st.error(f"An error occurred while processing the file: {e}")

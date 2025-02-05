@@ -23,6 +23,22 @@ from sklearn.metrics import silhouette_score
 from yellowbrick.cluster import SilhouetteVisualizer
 
 import plotly.graph_objects as go
+import logging
+
+# Define a separate logger
+user_logger = logging.getLogger("user_logs")
+user_logger.setLevel(logging.INFO)
+
+# Prevent adding multiple handlers
+if not user_logger.handlers:
+    handler = logging.FileHandler("logs/user_actions.log", mode="a")  # Create a file handler that directs log messages to a file
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Formatter defines how the log messages look
+    handler.setFormatter(formatter)  # Formats logs before saving them
+    user_logger.addHandler(handler)  # Attach handler to the logger
+
+
+def log_user_action(type, action):
+    user_logger.info(f"{type}: {action}")
 
 
 def list_wrap(x):
@@ -395,7 +411,11 @@ def convert_numeric(df):
     return df
 
 
-def process_data(_df, cfg, target, task_type, split_value, all=False):
+def process_data(_df, cfg, target, task_type, split_value, selected_options, all=False):
+    log_user_action("cfgs", cfg)
+    log_user_action("Dropped Columns", selected_options)
+    log_user_action("Original Number of Rows", _df.shape[0])
+
     if cfg["outlier"] != "Use Isolation Forest":
         # Remove outliers before imputation for a more precise mean calculation
         if task_type != "Time":
@@ -425,6 +445,7 @@ def process_data(_df, cfg, target, task_type, split_value, all=False):
             )
             _DF = missing(_DF, cfg["clean"])
 
+    log_user_action("Number of Rows After Processing", _DF.shape[0])
     if all:  # Not to split data when doing clustering or time series
         return _DF
 
