@@ -8,19 +8,16 @@ import plotly.graph_objects as go
 import altair as alt
 
 
-def translate_seasonality_option(option):
-    if option == "Auto":
-        return "auto"  # Prophet's automatic determination
-    elif option == "True":
-        return True  # Enable seasonality
-    elif option == "False":
-        return False  # Disable seasonality
-    else:
-        raise ValueError("Invalid option for seasonality.")
+def download_preds(df):
+    st.markdown("### 📥 Download Predictions")
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Predictions as CSV",
+        data=csv,
+        file_name="predictions.csv",
+        mime="text/csv",
+    )
 
-
-# Set page configuration
-# st.set_page_config(page_title="Business AI Tool", layout="wide")
 
 # Page Title
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
@@ -28,8 +25,8 @@ st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
 # File Upload Section
 st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
-    "Upload a CSV, Excel, Parquet, or Pickle file",
-    type=["csv", "xls", "xlsx", "pkl", "parquet"],
+    "Upload a CSV, Excel, or Parquet file",
+    type=["csv", "xls", "xlsx", "parquet"],
 )
 
 # Seed Input
@@ -43,18 +40,11 @@ if uploaded_file:
         df = pd.read_csv(uploaded_file)
     elif file_extension in ["xls", "xlsx"]:
         df = pd.read_excel(uploaded_file)
-    elif file_extension == "pkl":
-        try:
-            _model = pickle.load(uploaded_file)
-            st.success("✅ Model file loaded successfully!")
-        except pickle.UnpicklingError:
-            st.error("❌ Invalid Pickle file. Please upload a valid file.")
-            st.stop()
     elif file_extension == "parquet":
         df = pd.read_parquet(uploaded_file)
     else:
         st.error(
-            "❌ Unsupported file type. Please upload a CSV, Excel, or Pickle file."
+            "❌ Unsupported file type. Please upload a CSV, Excel, or Parquet file."
         )
         st.stop()
 
@@ -395,7 +385,7 @@ if uploaded_file:
             - What will the sales be next week?
             - How will electricity demand change throughout the day?
     
-            **Models**: Prophet, LSTM.
+            **Models**: Prophet
             """
                 )
             with col2:
@@ -527,7 +517,7 @@ if uploaded_file:
             # cfg["pca"] = st.checkbox("Apply PCA")
             # if cfg["pca"]:
             #     pca_data = utils.process_data(
-            #         back_DF, cfg, target, task_type, validation_size, all=True
+            #         back_DF, cfg, target, task_type, validation_size, selected_options, all=True
             #     )
             #     pca_fig, pca_comp = utils.PCA_visualization(pca_data)
             #     st.pyplot(pca_fig)
@@ -549,15 +539,15 @@ if uploaded_file:
             # cfg["alg"] = st.selectbox("📈 Select Model", ["Prophet", "LSTM"])
             cfg["alg"] = "Prophet"
 
-            if cfg["alg"] == "Prophet":
-                # adhust frequency options to be selected by the user
-                freq_options = {
-                    "Minutes": "min",
-                    "Hours": "H",
-                    "Days": "D",
-                    "Weeks": "W",
-                    "Months": "M",
-                }
+        if cfg["alg"] == "Prophet":
+            # adjust frequency options to be selected by the user
+            freq_options = {
+                "Minutes": "min",
+                "Hours": "H",
+                "Days": "D",
+                "Weeks": "W",
+                "Months": "M",
+            }
 
                 ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
                 ts_kw["target_col"] = target
@@ -578,71 +568,62 @@ if uploaded_file:
                 ts_kw["validation_size"] = validation_size / 100
                 cfg["ts_config"] = ts_kw
 
-            # cfg['skew_fix'] = st.checkbox('Skew Fix')
-            # cfg['poly_feat'] = False
-            cfg["apply_GridSearch"] = False
+        cfg["apply_GridSearch"] = False
 
-            print(cfg["task_type"])
+        print(cfg["task_type"])
 
-        # Execute Task
-        # Execute Task
-        if st.button("🚀 Train Model"):
-            if task_type == "Classification":
-                st.write("Perform classification task with option:")
-                X_train, X_test, y_train, y_test = utils.process_data(
-                    DF, cfg, target, task_type, validation_size
-                )
-                report = model(X_train, X_test, y_train, y_test, cfg)
-                # st.write("Accuracy:")
-                # st.write(report[0])
-                # st.write("Confusion Matrix")
-                # st.write(report[1])
-                st.write("**Accuracy (%)**: Use when overall correctness matters most.")
-                st.write(report["accuracy"] * 100)
-                # st.write("**Precision (%)**: Use when false positives are costly (e.g., unnecessary alerts).")
-                # st.write(report['precision']*100)
-                # st.write("**Recall (%)**:  Use when missing true positives is critical (e.g., detecting fraud).")
-                # st.write(report['recall']*100)
-                # st.write("**F1-Score (%)**: Use for a balanced approach when data is uneven (both recall and percision "
-                #          "matters).")
-                # st.write(report['f1']*100)
-            # st.write("**Confusion Matrix (%)**")
-            # st.write(report['cm'])
+    # Execute Task
+    if st.button("🚀 Train Model"):
+        if task_type == "Classification":
+            st.write("Perform classification task with option:")
+            X_train, X_test, y_train, y_test = utils.process_data(
+                DF, cfg, target, task_type, validation_size, selected_options
+            )
+            report = model(X_train, X_test, y_train, y_test, cfg)
+            # st.write("Accuracy:")
+            # st.write(report[0])
+            # st.write("Confusion Matrix")
+            # st.write(report[1])
+            st.write("**Accuracy (%)**: Use when overall correctness matters most.")
+            st.write(report["accuracy"] * 100)
+            # st.write("**Precision (%)**: Use when false positives are costly (e.g., unnecessary alerts).")
+            # st.write(report['precision']*100)
+            # st.write("**Recall (%)**:  Use when missing true positives is critical (e.g., detecting fraud).")
+            # st.write(report['recall']*100)
+            # st.write("**F1-Score (%)**: Use for a balanced approach when data is uneven (both recall and percision "
+            #          "matters).")
+            # st.write(report['f1']*100)
+        # st.write("**Confusion Matrix (%)**")
+        # st.write(report['cm'])
 
-            elif task_type == "Regression":
-                st.write("Perform Regression task with option:")
-                X_train, X_test, y_train, y_test = utils.process_data(
-                    DF, cfg, target, task_type, validation_size
-                )
-                report = model(X_train, X_test, y_train, y_test, cfg)
-                st.write("MSE:")
-                st.write(report[0])
-                st.write("R2:")
-                st.write(report[1])
+        elif task_type == "Regression":
+            st.write("Perform Regression task with option:")
+            X_train, X_test, y_train, y_test = utils.process_data(
+                DF, cfg, target, task_type, validation_size, selected_options
+            )
+            report = model(X_train, X_test, y_train, y_test, cfg)
+            st.write("MSE:")
+            st.write(report[0])
+            st.write("R2:")
+            st.write(report[1])
 
-            elif task_type == "Time":
-                st.write("Performing Time Series Analysis")
-                ts_df = utils.process_data(
-                    DF, cfg, target, task_type, validation_size, all=True
-                )
-                pf = model(ts_df, cfg=cfg)
-                rmse, mape = pf.calculate_errors()
-                st.write(f"RMSE: {rmse}")
-                st.write(f"MAPE: {mape}")
+        elif task_type == "Time":
+            st.write("Performing Time Series Analysis")
+            ts_df = utils.process_data(
+                DF, cfg, target, task_type, validation_size, selected_options, all=True
+            )
+            pf = model(ts_df, cfg=cfg)
+            rmse, mape = pf.calculate_errors()
+            st.write(f"RMSE: {rmse}")
+            st.write(f"MAPE: {mape}")
 
-                # Constrain Raw Data Plot
-                raw_fig = pf.slide_display()
-                raw_fig.update_layout(
-                    width=600, height=300  # Adjust width and height
-                )
-                st.plotly_chart(raw_fig, use_container_width=True)
+            # Raw Data Plot
+            raw_fig = pf.slide_display()
+            st.plotly_chart(raw_fig, use_container_width=True)
 
-                # Constrain Matplotlib Validation Plot
-                forecast_fig = pf.plot_test_with_actual()
-                forecast_fig.update_layout(
-                    width=600, height=300  # Adjust width and height
-                )
-                st.plotly_chart(forecast_fig, use_container_width=True)
+            # Validation Data Plot
+            forecast_fig = pf.plot_test_with_actual()
+            st.plotly_chart(forecast_fig, use_container_width=True)
 
                 with st.expander("📈 Understanding Components Plots"):
                     st.write(
@@ -662,46 +643,25 @@ if uploaded_file:
                     )
                 st.pyplot(pf.plot_component())
 
+            # For Univariate inference
+            if len(DF.columns) == 2:
                 st.session_state.ts_preds = pf.inference()
-                # Constrain Matplotlib Predictions Plot
+                # Predicted Data Plot
                 st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
-                st.session_state.predictions_fig.update_layout(
-                    width=600, height=300  # Adjust width and height
-                )
-
-                # For multivariate inference
-                # st.markdown("### Upload Inference Data")
-                # uploaded_file = st.file_uploader(
-                #     "Upload a CSV, Excel, or Parquet file",
-                #     type=["csv", "xls", "xlsx", "parquet"],
-                # )
-                # if uploaded_file:
-                #     # Handle file upload
-                #     file_extension = uploaded_file.name.split(".")[-1]
-                #     if file_extension == "csv":
-                #         test_df = pd.read_csv(uploaded_file)
-                #     elif file_extension in ["xls", "xlsx"]:
-                #         test_df = pd.read_excel(uploaded_file)
-                #     elif file_extension == "parquet":
-                #         test_df = pd.read_parquet(uploaded_file)
-                #     print("file uploaded")
-                #     forecasts = pf.inference(test_df)
-                #     st.dataframe(forecasts)
 
             elif task_type == "Cluster":
                 st.write("Perform Clustering task with option:")
 
-        if task_type == "Cluster":
-            cluster_df = utils.process_data(
-                DF, cfg, target, task_type, validation_size, all=True
-            )
-            report = model(cluster_df, cfg=cfg)
-
-            # st.pyplot(report)
-            X_test = (
-                cluster_df.copy()
-            )  # Ensure the test data does not include the target column
-            predictions = inference(X_test)  # Replace this with your prediction function
+    if task_type == "Cluster":
+        cluster_df = utils.process_data(
+            DF, cfg, target, task_type, validation_size, selected_options, all=True
+        )
+        report = model(cluster_df, cfg=cfg)
+        # st.pyplot(report)
+        X_test = (
+            cluster_df.copy()
+        )  # Ensure the test data does not include the target column
+        predictions = inference(X_test)  # Replace this with your prediction function
 
             cluster_df["cluster"] = predictions  # Append predictions to the test data
             # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
@@ -719,22 +679,13 @@ if uploaded_file:
                 )
                 st.write(cluster_plot)
 
-            # Download predictions
-            st.markdown("### 📥 Download Predictions")
-            csv = cluster_df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="Download Predictions as CSV",
-                data=csv,
-                file_name="predictions.csv",
-                mime="text/csv",
-            )
-            st.stop()
+        download_preds(cluster_df)
+        st.stop()
 
-        if task_type != "Time":
-
-            # Inference Section
-            st.markdown("### 🔍 What If / Inference")
-            st.write("""Provide input values to test your trained model interactively.""")
+    if task_type != "Time":
+        # Inference Section
+        st.markdown("### 🔍 What If / Inference")
+        st.write("""Provide input values to test your trained model interactively.""")
 
             # Create an empty DataFrame for user inputs
             inf_df = pd.DataFrame(columns=DF.columns)
@@ -778,6 +729,7 @@ if uploaded_file:
                         "Unable to define classes automatically. Check your data or model."
                     )
 
+    if (task_type == "Time" and len(DF.columns) == 2) or task_type != "Time":
         # Run Inference Button
         if st.button("🚀 Run Inference"):
             try:
@@ -809,9 +761,9 @@ if uploaded_file:
                     st.write(f"**Prediction:** for {target} {preds}")
                     st.markdown(
                         """
-                       **📝 Note**: Regression models predict continuous numeric values,
-                       which can range over an interval rather than being limited to discrete categories.
-                       """
+                    **📝 Note**: Regression models predict continuous numeric values,
+                    which can range over an interval rather than being limited to discrete categories.
+                    """
                     )
 
                 elif task_type == "Cluster":
@@ -823,16 +775,19 @@ if uploaded_file:
                 elif task_type == "Time":
                     st.dataframe(st.session_state.ts_preds)
                     st.plotly_chart(st.session_state.predictions_fig, use_container_width=True)
+                    download_preds(st.session_state.ts_preds)
 
             except Exception as e:
                 st.error(f"An error occurred during inference: {e}")
 
+    if (task_type == "Time" and len(DF.columns) > 2) or task_type != "Time":
         # Upload testing data
         # Add functionality to upload test data
         st.subheader("🔍 Upload Test Data and Predict")
         st.write(
             """
-        Upload your test dataset to generate predictions using the selected model. Ensure the test dataset has the same structure (columns) as the training data.
+        Upload your test dataset to generate predictions using the selected model.
+        Ensure the test dataset has the same structure (columns) as the training data.
         """
         )
 
@@ -860,11 +815,22 @@ if uploaded_file:
                     st.stop()
 
                 # Validate test data structure
-                if set(test_df.columns) != set(DF.columns) - {target}:
+                if set(test_df.columns) != set(DF.columns) - {target} and task_type != "Time":
                     st.error(
                         "❌ The columns in the test data must match the training data (excluding the target column)."
                     )
+                    st.stop()
 
+                elif set(test_df.columns) != set(DF.columns) - {target, ts_kw["date_col"]} and task_type == "Time":
+                    st.error(
+                        "❌ The columns in the test data must match the training data (excluding the target and date columns)."
+                    )
+                    st.stop()
+
+                elif len(test_df) != ts_kw["f_period"] and task_type == "Time":
+                    st.error(
+                        "❌ The number of rows in the test data must match the selected number of points to forecast."
+                    )
                     st.stop()
                 else:
                     st.success("✅ Test data uploaded successfully!")
@@ -873,32 +839,30 @@ if uploaded_file:
 
                     # Run predictions
                     if st.button("🚀 Run Predictions"):
-                        X_test = (
-                            test_df.copy()
-                        )  # Ensure the test data does not include the target column
-                        predictions = inference(
-                            X_test
-                        )  # Replace this with your prediction function
+                        if task_type == "Time":
+                            # Only for multivariate
+                            test_df, preds_plot = inference(test_df, cfg)
+                        else:
+                            X_test = (
+                                test_df.copy()
+                            )  # Ensure the test data does not include the target column
+                            predictions = inference(
+                                X_test, cfg
+                            )  # Replace this with your prediction function
 
-                        test_df["Predictions"] = (
-                            predictions  # Append predictions to the test data
-                        )
-                        test_df["Predictions"] = test_df["Predictions"].apply(
-                            lambda x: max(x, 1)
-                        )
+                            test_df["Predictions"] = (
+                                predictions  # Append predictions to the test data
+                            )
+                            test_df["Predictions"] = test_df["Predictions"].apply(
+                                lambda x: max(x, 1)
+                            )
                         st.success("✅ Predictions generated successfully!")
                         st.write("Here is the test data with predictions:")
                         st.dataframe(test_df)
+                        if task_type == "Time":
+                            st.plotly_chart(preds_plot, use_container_width=True)
 
-                        # Download predictions
-                        st.markdown("### 📥 Download Predictions")
-                        csv = test_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="Download Predictions as CSV",
-                            data=csv,
-                            file_name="predictions.csv",
-                            mime="text/csv",
-                        )
+                        download_preds(test_df)
 
             except Exception as e:
                 st.error(f"An error occurred while processing the file: {e}")

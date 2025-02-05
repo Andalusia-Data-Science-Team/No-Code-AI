@@ -5,7 +5,8 @@ from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransfo
 from .model_utils import grid_dict
 
 import pickle
-import pandas as pd, numpy as np
+import pandas as pd
+import numpy as np
 
 from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -21,13 +22,13 @@ from sklearn.pipeline import Pipeline
 
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
+    # precision_score,
+    # recall_score,
+    # f1_score,
     confusion_matrix,
     mean_squared_error,
     r2_score,
-    silhouette_score,
+    # silhouette_score,
 )
 
 from sklearn.linear_model import (
@@ -214,6 +215,12 @@ class Model:
             self.grid_model = GridSearchModel(
                 alg=self.algorithm, grid_params=grid_dict[algorithm]
             )
+
+        self.set_model(self.algorithm)
+
+    @property
+    def set_model(self, val):
+        return f"model_{val}"
 
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
         """
@@ -425,6 +432,8 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         print("Setting Prophet args")
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
+        with open("model.pkl", "wb") as f:
+            pickle.dump(pf, f)  # Saving trained model
         return pf
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
@@ -447,21 +456,26 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         # return _model.cluster_metrics(X_train)
 
 
-def inference(X, proba=False):
+def inference(X, cfg, proba=False):
     try:
-        _model: Model
         with open("model.pkl", "rb") as f:
             _model = pickle.load(f)
 
-        if proba:
-            return _model.predict_prob(X)
-
-        return _model.pipeline.predict(X)
+        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
     except FileNotFoundError:
         print("Model file not found.")
-
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
+
+    if cfg["task_type"] == "Time":
+        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        preds = _model.inference(X)
+        preds_plot = _model.plot_predictions(preds)
+        return preds, preds_plot
+    elif cfg["task_type"] != "Time" and proba:
+        return _model.predict_prob(X)
+    else:
+        return _model.pipeline.predict(X)
 
 
 def get_corresponding_labels(y, encode=False):
