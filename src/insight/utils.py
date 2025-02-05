@@ -23,6 +23,7 @@ from sklearn.metrics import silhouette_score
 from yellowbrick.cluster import SilhouetteVisualizer
 
 import plotly.graph_objects as go
+import plotly.express as px
 
 
 def list_wrap(x):
@@ -1421,29 +1422,39 @@ def silhouette_analysis(df, start_k, stop_k, figsize=(20, 50)):
     return plt
 
 
-def cluster_scatter_plot(df, x_col, y_col, cluster_col="Cluster"):
-    """Create an interactive scatter plot for clustering results."""
-    fig = go.Figure()
+def cluster_scatter_plot(df, x_col, y_col, cluster_col="cluster"):
+    # """Create an interactive scatter plot for clustering results."""
+    # fig = go.Figure()
+    #
+    # # Add scatter plot for each cluster
+    # for cluster in df[cluster_col].unique():
+    #     cluster_data = df[df[cluster_col] == cluster]
+    #     fig.add_trace(
+    #         go.Scatter(
+    #             x=cluster_data[x_col],
+    #             y=cluster_data[y_col],
+    #             mode="markers",
+    #             name=f"Cluster {cluster}",
+    #             marker=dict(size=10, opacity=0.8),
+    #             text=cluster_data[cluster_col],  # Add cluster labels as hover text
+    #         )
+    #     )
+    #
+    # # Update layout to ensure continuous axes
+    # fig.update_layout(
+    #     # xaxis=dict(title=x_col, type='linear'),  # Ensure x-axis is treated as continuous
+    #     # yaxis=dict(title=y_col, type='linear'),  # Ensure y-axis is treated as continuous
+    #     title="Cluster Scatter Plot",
+    #     showlegend=True,
+    # )
+    cluster_order = df[cluster_col].value_counts(normalize=True).sort_values(ascending=True)
+    # Create a scatter plot using Plotly Express
+    fig = px.scatter(df, x=x_col, y=y_col, color="cluster",
+                     labels={x_col: x_col, y_col: y_col},
+                     color_continuous_scale=px.colors.sequential.Plasma,
+                     category_orders={"cluster": cluster_order.to_dict()})
 
-    # Add scatter plot for each cluster
-    for cluster in df[cluster_col].unique():
-        cluster_data = df[df[cluster_col] == cluster]
-        fig.add_trace(
-            go.Scatter(
-                x=cluster_data[x_col],
-                y=cluster_data[y_col],
-                mode="markers",
-                name=f"Cluster {cluster}",
-                marker=dict(size=10, opacity=0.8),
-                text=cluster_data[cluster_col],  # Add cluster labels as hover text
-            )
-        )
+    # Update marker size and edge color
+    fig.update_traces(marker=dict(size=12, line=dict(width=2, color='DarkSlateGrey')))
 
-    # Update layout to ensure continuous axes
-    fig.update_layout(
-        # xaxis=dict(title=x_col, type='linear'),  # Ensure x-axis is treated as continuous
-        # yaxis=dict(title=y_col, type='linear'),  # Ensure y-axis is treated as continuous
-        title="Cluster Scatter Plot",
-        showlegend=True,
-    )
     return fig

@@ -52,7 +52,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 
 from sklearn.cluster import KMeans, DBSCAN
-from sklearn.mixture import GaussianMixture
+from sklearn.mixture import  GaussianMixture
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import KFold
@@ -84,7 +84,7 @@ models_dict = {
     "DecisionTree_cls": DecisionTreeClassifier(),
     "kmeans": KMeans(),
     "dbscan": DBSCAN(),
-    "gmm": GaussianMixture
+    "gmm" : GaussianMixture()
 }
 
 normilizers = {
