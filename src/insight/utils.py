@@ -25,7 +25,7 @@ from yellowbrick.cluster import SilhouetteVisualizer
 import plotly.graph_objects as go
 import logging
 
-# Define a separate logger
+# Define logger
 user_logger = logging.getLogger("user_logs")
 user_logger.setLevel(logging.INFO)
 
