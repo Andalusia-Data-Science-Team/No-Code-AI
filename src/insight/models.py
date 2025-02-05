@@ -195,6 +195,7 @@ class Model:
         self.pipeline = None
         self.model = None
         self.label_encoder = LabelEncoder()
+        self.algorithm = algorithm
         if grid is True and len(model_kws) != 0:
             warnings.warn(
                 "Can't use grid search with predefined model kwargs, setting kwargs to None..."
@@ -216,11 +217,9 @@ class Model:
                 alg=self.algorithm, grid_params=grid_dict[algorithm]
             )
 
-        self.set_model(self.algorithm)
-
     @property
-    def set_model(self, val):
-        return f"model_{val}"
+    def set_model(self):
+        return f"model_{self.algorithm}"
 
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
         """
@@ -481,8 +480,14 @@ def inference(X, cfg, proba=False):
         preds_plot = _model.plot_predictions(preds)
         return preds, preds_plot
     elif cfg["task_type"] != "Time" and proba:
+        # assert (
+        #     _model.set_model == cfg["alg"]
+        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
         return _model.predict_prob(X)
     else:
+        # assert (
+        #     _model.set_model == cfg["alg"]
+        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
         return _model.pipeline.predict(X)
 
 
