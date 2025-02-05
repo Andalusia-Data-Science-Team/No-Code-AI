@@ -34,6 +34,10 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.f_period = f_period
         self.validation = validation_size
 
+    @property
+    def set_model(self):
+        return "Prophet"
+
     def fit(self, X, y=None):
 
         if isinstance(X, pd.DataFrame):

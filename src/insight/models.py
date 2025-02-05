@@ -214,6 +214,12 @@ class Model:
                 alg=self.algorithm, grid_params=grid_dict[algorithm]
             )
 
+        self.set_model(self.algorithm)
+
+    @property
+    def set_model(self, val):
+        return f"model_{val}"
+
     def build_pipeline(self, X, poly_feat=False, skew_fix=False):
         """
         Build the preprocessing pipeline.
@@ -450,15 +456,17 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
 def inference(X, cfg, proba=False):
     try:
-        _model: Model
         with open("model.pkl", "rb") as f:
             _model = pickle.load(f)
+
+        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
     except FileNotFoundError:
         print("Model file not found.")
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
 
     if cfg["task_type"] == "Time":
+        assert _model.set_model == cfg["alg"], f"mismatch between loaded model and cfg model '{cfg['alg']}'"
         preds = _model.inference(X)
         preds_plot = _model.plot_predictions(preds)
         return preds, preds_plot
