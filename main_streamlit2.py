@@ -456,10 +456,10 @@ if uploaded_file:
 
             # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
             # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-            # cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
-            #                                       "machine learning model, like adjusting settings on a machine to "
-            #                                       "achieve peak efficiency and accuracy")
-            cfg["apply_GridSearch"] = False
+            cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                                                  "machine learning model, like adjusting settings on a machine to "
+                                                  "achieve peak efficiency and accuracy")
+            # cfg["apply_GridSearch"] = False
 
         elif task_type == "Regression":
             st.markdown("#### Regression Options")
@@ -484,10 +484,10 @@ if uploaded_file:
             cfg["alg"] = selected_model["code"]
             # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
             # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-            # cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
-            #                                       "machine learning model, like adjusting settings on a machine to "
-            #                                       "achieve peak efficiency and accuracy")
-            cfg["apply_GridSearch"] = False
+            cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                                                  "machine learning model, like adjusting settings on a machine to "
+                                                  "achieve peak efficiency and accuracy")
+            # cfg["apply_GridSearch"] = False
 
         elif task_type == "Cluster":
             cfg["task_type"] = task_type
