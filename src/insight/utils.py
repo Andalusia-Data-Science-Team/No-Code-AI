@@ -25,10 +25,13 @@ from yellowbrick.cluster import SilhouetteVisualizer
 # import plotly.graph_objects as go
 import plotly.express as px
 import logging
+import os
 
 # Define logger
 user_logger = logging.getLogger("user_logs")
 user_logger.setLevel(logging.INFO)
+
+os.makedirs("logs", exist_ok=True)  # Creates the logs directory if it doesn't exist
 
 # Prevent adding multiple handlers
 if not user_logger.handlers:
@@ -85,7 +88,7 @@ def missing(_df, clean_method="Remove Missing Data"):
     df = _df.copy()
     df.drop_duplicates(inplace=True)
     df.replace(to_replace=[None], value=np.nan, inplace=True)  # Added after testing
-    df = df.dropna(axis=1, how='all')  # Added after testing
+    df = df.dropna(axis=1, how="all")  # Added after testing
 
     if clean_method == "Remove Missing Data":
         df.dropna(inplace=True)
@@ -115,7 +118,9 @@ def resample(df: pd.DataFrame, date_col, target_col, freq):  # For TimeSeries da
     """
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     others = [col for col in df.columns if col not in [target_col]]
-    df_others = df[others]  # A slice of the dataframe containing date_col and every other col except target_col
+    df_others = df[
+        others
+    ]  # A slice of the dataframe containing date_col and every other col except target_col
     _df: pd.DataFrame = df[[date_col, target_col]]
     _df = (
         _df.set_index(date_col, inplace=False).resample(freq).mean()
