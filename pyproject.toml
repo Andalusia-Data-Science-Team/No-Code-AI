@@ -61,7 +61,7 @@ deployment = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=claims"
+addopts = "--cov=insight"
 testpaths = [
     "test",
 ]
