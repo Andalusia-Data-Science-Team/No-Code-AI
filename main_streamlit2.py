@@ -732,7 +732,7 @@ if uploaded_file:
         if st.button("🚀 Run Inference"):
             try:
                 if task_type == "Classification":
-                    preds = inference(inf_df, True)
+                    preds = inference(inf_df,cfg, True)
                     st.markdown("#### 📊 Model Prediction Results")
 
                     if classes:
@@ -753,7 +753,7 @@ if uploaded_file:
                         )
 
                 elif task_type == "Regression":
-                    preds = max(inference(inf_df), 1)
+                    preds = max(inference(inf_df,cfg), 1)
 
                     st.markdown("#### 📊 Predicted Output")
                     st.write(f"**Prediction:** for {target} {preds}")
@@ -765,7 +765,7 @@ if uploaded_file:
                     )
 
                 elif task_type == "Cluster":
-                    preds = inference(inf_df)
+                    preds = inference(inf_df,cfg)
 
                     st.markdown("#### 📊 Predicted Cluster")
                     st.write(f"**Predicted Cluster:**  {preds}")
