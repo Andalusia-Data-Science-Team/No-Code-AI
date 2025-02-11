@@ -659,7 +659,7 @@ if uploaded_file:
         X_test = (
             cluster_df.copy()
         )  # Ensure the test data does not include the target column
-        predictions = inference(X_test)  # Replace this with your prediction function
+        predictions = inference(X_test,cfg)  # Replace this with your prediction function
 
         cluster_df["cluster"] = predictions  # Append predictions to the test data
         # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
