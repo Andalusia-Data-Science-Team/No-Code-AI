@@ -85,7 +85,7 @@ if uploaded_file:
                 use_container_width=True,
             )
         else:
-            st.write("The uploaded file doesn't conatin numerical data")
+            st.write("The uploaded file doesn't contain numerical data")
 
     # Categorical Description
     with st.expander("Categorical Description"):
@@ -101,7 +101,7 @@ if uploaded_file:
                 use_container_width=True,
             )
         else:
-            st.write("The uploaded file doesn't conatin categorical data")
+            st.write("The uploaded file doesn't contain categorical data")
     # Data Types
     # with st.expander("DataFrame Types"):
     #     st.write("""
@@ -542,10 +542,10 @@ if uploaded_file:
             # adjust frequency options to be selected by the user
             freq_options = {
                 "Minutes": "min",
-                "Hours": "H",
+                "Hours": "h",
                 "Days": "D",
                 "Weeks": "W",
-                "Months": "M",
+                "Months": "ME",
             }
 
             ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)

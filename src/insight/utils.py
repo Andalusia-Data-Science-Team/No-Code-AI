@@ -25,10 +25,13 @@ from yellowbrick.cluster import SilhouetteVisualizer
 # import plotly.graph_objects as go
 import plotly.express as px
 import logging
+import os
 
 # Define logger
 user_logger = logging.getLogger("user_logs")
 user_logger.setLevel(logging.INFO)
+
+os.makedirs("logs", exist_ok=True)  # Creates the logs directory if it doesn't exist
 
 # Prevent adding multiple handlers
 if not user_logger.handlers:
@@ -84,6 +87,8 @@ def format_value(s, format_str):
 def missing(_df, clean_method="Remove Missing Data"):
     df = _df.copy()
     df.drop_duplicates(inplace=True)
+    df.replace(to_replace=[None], value=np.nan, inplace=True)  # Added after testing
+    df = df.dropna(axis=1, how="all")  # Added after testing
 
     if clean_method == "Remove Missing Data":
         df.dropna(inplace=True)
@@ -91,8 +96,9 @@ def missing(_df, clean_method="Remove Missing Data"):
 
     elif clean_method == "Impute Missing Data":
         numeric_features = df.select_dtypes(include=np.number).columns
-        numeric_imputer = SimpleImputer(strategy="mean")
-        df[numeric_features] = numeric_imputer.fit_transform(df[numeric_features])
+        if len(numeric_features) != 0:  # Added after testing
+            numeric_imputer = SimpleImputer(strategy="mean")
+            df[numeric_features] = numeric_imputer.fit_transform(df[numeric_features])
 
         categorical_features = df.select_dtypes(include=object).columns
         if len(categorical_features) != 0:
@@ -103,17 +109,19 @@ def missing(_df, clean_method="Remove Missing Data"):
         return df
 
     else:
-        raise ValueError("Invalied input for imputing")
+        raise ValueError("Invalid input for imputing")
 
 
-def resample(df, date_col, target_col, freq):  # For TimeSeries data
+def resample(df: pd.DataFrame, date_col, target_col, freq):  # For TimeSeries data
     """
     Resample the data to the inferred frequency and fill missing values.
     """
-    df[date_col] = pd.to_datetime(df[date_col])
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     others = [col for col in df.columns if col not in [target_col]]
-    df_others = df[others]
-    _df = df[[date_col, target_col]]
+    df_others = df[
+        others
+    ]  # A slice of the dataframe containing date_col and every other col except target_col
+    _df: pd.DataFrame = df[[date_col, target_col]]
     _df = (
         _df.set_index(date_col, inplace=False).resample(freq).mean()
     )  # Mean for aggregation
@@ -355,7 +363,13 @@ def inf_proc(item):
         return item
 
 
+def check_empty(df):
+    return True if df.empty else False
+
+
 def descriptive_analysis(df):
+    if check_empty(df):
+        raise ValueError("The uploaded DataFrame is empty")
     cat_des_analysis = None
     num_des_analysis = None
     if len(df.select_dtypes(include=np.number).columns) != 0:
@@ -420,6 +434,7 @@ def process_data(_df, cfg, target, task_type, split_value, selected_options, all
     log_user_action("cfgs", cfg)
     log_user_action("Dropped Columns", selected_options)
     log_user_action("Original Number of Rows", _df.shape[0])
+    log_user_action("Original Number of Columns", _df.shape[1])
 
     if cfg["outlier"] != "Use Isolation Forest":
         # Remove outliers before imputation for a more precise mean calculation
@@ -451,6 +466,7 @@ def process_data(_df, cfg, target, task_type, split_value, selected_options, all
             _DF = missing(_DF, cfg["clean"])
 
     log_user_action("Number of Rows After Processing", _DF.shape[0])
+    log_user_action("Number of columns After Processing", _DF.shape[1])
     if all:  # Not to split data when doing clustering or time series
         return _DF
 

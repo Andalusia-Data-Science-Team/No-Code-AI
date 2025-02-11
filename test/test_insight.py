@@ -1,5 +1,4 @@
 import pytest
-import re
 from insight.utils import format_value
 
 
