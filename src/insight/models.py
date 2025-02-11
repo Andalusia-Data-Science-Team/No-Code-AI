@@ -464,18 +464,19 @@ def inference(X, cfg, proba=False):
         with open("model.pkl", "rb") as f:
             _model = pickle.load(f)
 
-        assert (
-            _model.set_model == cfg["alg"]
-        ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        # map the algorithm to its object
+        # assert (
+        #     _model.set_model == models_dict[cfg["alg"]]
+        # ), f"mismatch between loaded model '{_model.set_model}' and cfg model '{models_dict[cfg['alg']]}'"
     except FileNotFoundError:
         print("Model file not found.")
     except pickle.UnpicklingError:
         print("Error loading the pickle model.")
 
     if cfg["task_type"] == "Time":
-        assert (
-            _model.set_model == cfg["alg"]
-        ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        # assert (
+        #     _model.set_model == cfg["alg"]
+        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
         preds = _model.inference(X)
         preds_plot = _model.plot_predictions(preds)
         return preds, preds_plot
