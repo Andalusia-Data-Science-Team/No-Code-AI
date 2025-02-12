@@ -437,7 +437,9 @@ if uploaded_file:
 
         # Task-Specific Configuration
         if task_type == "Classification":
-            available_models = {k: v for k, v in model_mapping.items() if "Classifier" in k}
+            available_models = {
+                k: v for k, v in model_mapping.items() if "Classifier" in k
+            }
             st.markdown("#### Classification Options")
             cfg["task_type"] = task_type
             # cfg["clean"] = st.selectbox("🧹 Data Cleaning", ["Remove Missing Data", "Impute Missing Data"])
@@ -456,9 +458,11 @@ if uploaded_file:
 
             # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
             # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-            cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
-                                                  "machine learning model, like adjusting settings on a machine to "
-                                                  "achieve peak efficiency and accuracy")
+            cfg["apply_GridSearch"] = st.checkbox(
+                "🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                "machine learning model, like adjusting settings on a machine to "
+                "achieve peak efficiency and accuracy"
+            )
             # cfg["apply_GridSearch"] = False
 
         elif task_type == "Regression":
@@ -484,9 +488,11 @@ if uploaded_file:
             cfg["alg"] = selected_model["code"]
             # cfg["skew_fix"] = st.checkbox("🔄 Fix Skewed Data")
             # cfg["poly_feat"] = st.checkbox("🔢 Add Polynomial Features")
-            cfg["apply_GridSearch"] = st.checkbox("🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
-                                                  "machine learning model, like adjusting settings on a machine to "
-                                                  "achieve peak efficiency and accuracy")
+            cfg["apply_GridSearch"] = st.checkbox(
+                "🔍 Optimize Hyperparameters: Hyperparameter optimization fine-tunes a "
+                "machine learning model, like adjusting settings on a machine to "
+                "achieve peak efficiency and accuracy"
+            )
             # cfg["apply_GridSearch"] = False
 
         elif task_type == "Cluster":
@@ -645,7 +651,9 @@ if uploaded_file:
             if len(DF.columns) == 2:
                 st.session_state.ts_preds = pf.inference()
                 # Predicted Data Plot
-                st.session_state.predictions_fig = pf.plot_predictions(st.session_state.ts_preds)
+                st.session_state.predictions_fig = pf.plot_predictions(
+                    st.session_state.ts_preds
+                )
 
             elif task_type == "Cluster":
                 st.write("Perform Clustering task with option:")
@@ -659,7 +667,9 @@ if uploaded_file:
         X_test = (
             cluster_df.copy()
         )  # Ensure the test data does not include the target column
-        predictions = inference(X_test,cfg)  # Replace this with your prediction function
+        predictions = inference(
+            X_test, cfg
+        )  # Replace this with your prediction function
 
         cluster_df["cluster"] = predictions  # Append predictions to the test data
         # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
@@ -732,14 +742,16 @@ if uploaded_file:
         if st.button("🚀 Run Inference"):
             try:
                 if task_type == "Classification":
-                    preds = inference(inf_df,cfg, True)
+                    preds = inference(inf_df, cfg, True)
                     st.markdown("#### 📊 Model Prediction Results")
 
                     if classes:
                         fig = go.Figure(
                             data=[
                                 go.Pie(
-                                    values=preds[0], labels=list(classes.keys()), hole=0.4
+                                    values=preds[0],
+                                    labels=list(classes.keys()),
+                                    hole=0.4,
                                 )
                             ]
                         )
@@ -753,7 +765,7 @@ if uploaded_file:
                         )
 
                 elif task_type == "Regression":
-                    preds = max(inference(inf_df,cfg), 1)
+                    preds = max(inference(inf_df, cfg), 1)
 
                     st.markdown("#### 📊 Predicted Output")
                     st.write(f"**Prediction:** for {target} {preds}")
@@ -765,14 +777,16 @@ if uploaded_file:
                     )
 
                 elif task_type == "Cluster":
-                    preds = inference(inf_df,cfg)
+                    preds = inference(inf_df, cfg)
 
                     st.markdown("#### 📊 Predicted Cluster")
                     st.write(f"**Predicted Cluster:**  {preds}")
 
                 elif task_type == "Time":
                     st.dataframe(st.session_state.ts_preds)
-                    st.plotly_chart(st.session_state.predictions_fig, use_container_width=True)
+                    st.plotly_chart(
+                        st.session_state.predictions_fig, use_container_width=True
+                    )
                     download_preds(st.session_state.ts_preds)
 
             except Exception as e:
@@ -813,19 +827,25 @@ if uploaded_file:
                     st.stop()
 
                 # Validate test data structure
-                if set(test_df.columns) != set(DF.columns) - {target} and task_type != "Time":
+                if (
+                    set(test_df.columns) != set(DF.columns) - {target}
+                    and task_type != "Time"
+                ):
                     st.error(
                         "❌ The columns in the test data must match the training data (excluding the target column)."
                     )
                     st.stop()
 
-                elif set(test_df.columns) != set(DF.columns) - {target, ts_kw["date_col"]} and task_type == "Time":
+                elif task_type == "Time" and set(test_df.columns) != set(DF.columns) - {
+                    target,
+                    ts_kw["date_col"],
+                }:
                     st.error(
                         "❌ The columns in the test data must match the training data (excluding the target and date columns)."
                     )
                     st.stop()
 
-                elif len(test_df) != ts_kw["f_period"] and task_type == "Time":
+                elif task_type == "Time" and len(test_df) != ts_kw["f_period"]:
                     st.error(
                         "❌ The number of rows in the test data must match the selected number of points to forecast."
                     )

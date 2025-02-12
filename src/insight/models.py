@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 import warnings
 
-from .utils import SkewnessTransformer, silhouette_analysis, PCADataFrameTransformer, log_user_action
+from .utils import (
+    SkewnessTransformer,
+    silhouette_analysis,
+    PCADataFrameTransformer,
+    log_user_action,
+)
 from .model_utils import grid_dict
 
 import pickle
@@ -466,8 +471,8 @@ def inference(X, cfg, proba=False):
 
         # map the algorithm to its object
         # assert (
-        #     _model.set_model == models_dict[cfg["alg"]]
-        # ), f"mismatch between loaded model '{_model.set_model}' and cfg model '{models_dict[cfg['alg']]}'"
+        #     _model.set_model == cfg["alg"]
+        # ), f"mismatch between loaded trained model and selected model '{cfg['alg']}'"
     except FileNotFoundError:
         print("Model file not found.")
     except pickle.UnpicklingError:
@@ -476,19 +481,19 @@ def inference(X, cfg, proba=False):
     if cfg["task_type"] == "Time":
         # assert (
         #     _model.set_model == cfg["alg"]
-        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        # ), f"mismatch between loaded trained model and selected model '{cfg['alg']}'"
         preds = _model.inference(X)
         preds_plot = _model.plot_predictions(preds)
         return preds, preds_plot
     elif cfg["task_type"] != "Time" and proba:
         # assert (
         #     _model.set_model == cfg["alg"]
-        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        # ), f"mismatch between loaded trained model and selected model '{cfg['alg']}'"
         return _model.predict_prob(X)
     else:
         # assert (
         #     _model.set_model == cfg["alg"]
-        # ), f"mismatch between loaded model and cfg model '{cfg['alg']}'"
+        # ), f"mismatch between loaded trained model and selected model '{cfg['alg']}'"
         return _model.pipeline.predict(X)
 
 
