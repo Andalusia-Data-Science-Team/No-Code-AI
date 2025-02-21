@@ -46,6 +46,8 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+
+    target-branch: "master"
     
     labels:
       - "dependencies"
@@ -53,51 +55,10 @@ updates:
     
     open-pull-requests-limit: 10
 
-  # Testing dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
+  # Check GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/.github/workflows"
     schedule:
-      interval: "monthly"  # Less frequent updates for testing tools
-      day: "monday"
-      time: "09:00"
-      timezone: "UTC"
-    
-    file-type: "all"
-    
-    # Focus only on testing dependencies
-    allow:
-      - dependency-type: "direct"
-    
-    pip-compile: true
-    pip-requirements:
-      - "setup.cfg"  # Since testing deps are in setup.cfg
-    
-    versioning-strategy: "auto"
-    
-    # Specify testing dependencies to update
-    groups:
-      testing:
-        patterns:
-          - "pytest*"
-          - "Sphinx*"
-          - "sphinx-*"
-          - "mypy"
-          - "flake8"
-          - "tox"
-          - "black"
-          - "autopep8"
-    
-    commit-message:
-      prefix: "test-deps"
-      include: "scope"
-      prefix-development: "dev"
-    
+      interval: "weekly"
     labels:
-      - "dependencies"
-      - "testing"
-      - "development"
-    
-    reviewers:
-      - "team-python"
-    
-    open-pull-requests-limit: 5
+      - "actions"
