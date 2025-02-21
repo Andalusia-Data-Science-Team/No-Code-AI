@@ -1,0 +1,98 @@
+version: 2
+updates:
+  # Main dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    
+    file-type: "all"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    
+    pip-compile: true
+    pip-requirements:
+      - "setup.py"
+      - "setup.cfg"
+      - "pyproject.toml"
+    
+    versioning-strategy: "auto"
+    update-lockfiles: true
+    
+    # Exclude testing dependencies from this group
+    ignore:
+      - dependency-name: "pytest"
+      - dependency-name: "Sphinx"
+      - dependency-name: "sphinx-rtd-theme"
+      - dependency-name: "sphinx-autodoc-typehints"
+      - dependency-name: "pytest-cov"
+      - dependency-name: "mypy"
+      - dependency-name: "flake8"
+      - dependency-name: "tox"
+      - dependency-name: "black"
+      - dependency-name: "pytest-mock"
+      - dependency-name: "pytest-watcher"
+      - dependency-name: "autopep8"
+    
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    
+    labels:
+      - "dependencies"
+      - "production"
+    
+    open-pull-requests-limit: 5
+
+  # Testing dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"  # Less frequent updates for testing tools
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    
+    file-type: "all"
+    
+    # Focus only on testing dependencies
+    allow:
+      - dependency-type: "direct"
+    
+    pip-compile: true
+    pip-requirements:
+      - "setup.cfg"  # Since testing deps are in setup.cfg
+    
+    versioning-strategy: "auto"
+    
+    # Specify testing dependencies to update
+    groups:
+      testing:
+        patterns:
+          - "pytest*"
+          - "Sphinx*"
+          - "sphinx-*"
+          - "mypy"
+          - "flake8"
+          - "tox"
+          - "black"
+          - "autopep8"
+    
+    commit-message:
+      prefix: "test-deps"
+      include: "scope"
+      prefix-development: "dev"
+    
+    labels:
+      - "dependencies"
+      - "testing"
+      - "development"
+    
+    reviewers:
+      - "team-python"
+    
+    open-pull-requests-limit: 5
