@@ -21,7 +21,7 @@ keywords = ["machine learning", "python", "AI", "data science"]
 requires-python = ">=3.10"
 
 dependencies = [
-    "pandas==2.2.2",
+    "pandas==2.2.3",
     "scikit-learn==1.6.1",
     "xgboost==2.1.4",
     "tqdm==4.67.1",
