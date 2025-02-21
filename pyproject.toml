@@ -22,7 +22,7 @@ requires-python = ">=3.10"
 
 dependencies = [
     "pandas==2.2.2",
-    "scikit-learn==1.5.1",
+    "scikit-learn==1.6.1",
     "xgboost==2.1.4",
     "tqdm==4.67.1",
     "matplotlib==3.10.0",
