@@ -14,19 +14,11 @@ updates:
       time: "09:00"
       timezone: "Africa/Cairo"
     
-    file-type: "all"
     allow:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     
-    pip-compile: true
-    pip-requirements:
-      - "setup.py"
-      - "setup.cfg"
-      - "pyproject.toml"
-    
     versioning-strategy: "auto"
-    update-lockfiles: true
     
     # Exclude testing dependencies from this group
     ignore:
