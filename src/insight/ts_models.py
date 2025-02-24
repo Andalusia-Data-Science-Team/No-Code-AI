@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 from tqdm import tqdm
 
 from prophet import Prophet
+from src.insight.utils import check_empty
 
 
 class ProphetModel(BaseEstimator, TransformerMixin):
@@ -58,6 +59,10 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         train_size = math.ceil(len(df) * (1 - self.validation))
         train_df = feature_df.iloc[:train_size]
         self.test_df = feature_df.iloc[train_size:]
+        if check_empty(self.test_df):
+            raise ValueError(
+                "The selected validation size is too small, please increase it."
+            )
 
         self.m = Prophet(**self.prophet_params)
 
@@ -192,8 +197,23 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         return rmse, mape
 
     def inference(self, test_df=None):
-        start_date = self.test_df["ds"].max() + pd.Timedelta(1, self.freq)
-        end_date = start_date + pd.Timedelta(self.f_period - 1, self.freq)
+        start_mapping = {
+            "min": pd.DateOffset(minutes=1),
+            "h": pd.DateOffset(hours=1),
+            "D": pd.DateOffset(days=1),
+            "W": pd.DateOffset(weeks=1),
+            "ME": pd.DateOffset(months=1),
+        }
+        end_mapping = {
+            "min": pd.DateOffset(minutes=self.f_period-1),
+            "h": pd.DateOffset(hours=self.f_period-1),
+            "D": pd.DateOffset(days=self.f_period-1),
+            "W": pd.DateOffset(weeks=self.f_period-1),
+            "ME": pd.DateOffset(months=self.f_period-1),
+        }
+
+        start_date = self.test_df["ds"].max() + start_mapping[self.freq]
+        end_date = start_date + end_mapping[self.freq]
         future_df = pd.DataFrame(
             {"ds": pd.date_range(start=start_date, end=end_date, freq=self.freq)}
         )
