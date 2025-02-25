@@ -6,6 +6,25 @@ import src.insight.utils as utils
 from src.insight.models import model, inference
 import plotly.graph_objects as go
 import altair as alt
+from streamlit import runtime
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+
+def get_remote_ip() -> str:
+    """Get remote ip."""
+
+    try:
+        ctx = get_script_run_ctx()
+        if ctx is None:
+            return None
+
+        session_info = runtime.get_instance().get_client(ctx.session_id)
+        if session_info is None:
+            return None
+    except Exception:
+        return None
+
+    return session_info.request.remote_ip
 
 
 def download_preds(df):
@@ -579,6 +598,8 @@ if uploaded_file:
 
     # Execute Task
     if st.button("🚀 Train Model"):
+        utils.log_user_action("User IP", get_remote_ip())
+
         if task_type == "Classification":
             st.write("Perform classification task with option:")
             X_train, X_test, y_train, y_test = utils.process_data(
