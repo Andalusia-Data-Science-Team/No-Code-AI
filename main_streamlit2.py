@@ -570,7 +570,7 @@ if uploaded_file:
                 "Hours": "h",
                 "Days": "D",
                 "Weeks": "W",
-                "Months": "ME",
+                "Months": "MS",
             }
 
             ts_kw["date_col"] = st.selectbox("Select The Date Column", DF.columns)
