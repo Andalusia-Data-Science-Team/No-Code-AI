@@ -4,6 +4,7 @@ import math
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import root_mean_squared_error, mean_absolute_percentage_error
+from sklearn.preprocessing import OneHotEncoder
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -25,6 +26,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         validation_size,
         prophet_params=None,
         selected_cols=None,
+        encoder=None,
     ):
 
         self.date_col = date_col
@@ -34,6 +36,7 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.freq = freq
         self.f_period = f_period
         self.validation = validation_size
+        self.encoder = encoder
 
     @property
     def set_model(self):
@@ -52,6 +55,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.display_df = df.copy()
         df = df.rename(columns={self.date_col: "ds", self.target_col: "y"})
         prophet_df = df.sort_values(by="ds").reset_index(drop=True)
+
+        prophet_df, self.encoder = self.cat_encoding(prophet_df)  # Perform One Hot Encoding in case of categorical features
 
         feature_df = self.add_features(prophet_df, self.selected_cols)
         feature_df = self.create_date_features(feature_df)
@@ -73,6 +78,26 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         self.m.fit(train_df)
 
         return self
+
+    def cat_encoding(self, df):
+        categorical_features = df.select_dtypes(include=object).columns
+        if categorical_features is not None:
+            encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+            categorical_cols = df.select_dtypes(include=object).columns
+            encoded_array = encoder.fit_transform(df[categorical_cols])
+
+            encoded_df = pd.DataFrame(encoded_array, columns=encoder.get_feature_names_out())
+            df_final = pd.concat([df.drop(columns=categorical_cols), encoded_df], axis=1)
+
+            self.selected_cols = df_final.columns.tolist()
+            return df_final, encoder
+
+    def encode_test(self, df):
+        categorical_cols = df.select_dtypes(include=object).columns
+        encoded_array = self.encoder.transform(df[categorical_cols])
+        encoded_df = pd.DataFrame(encoded_array, columns=self.encoder.get_feature_names_out())
+        df_final = pd.concat([df.drop(columns=categorical_cols), encoded_df], axis=1)
+        return df_final
 
     def transform(self, X=None):
         self.forecasts = self.m.predict(self.test_df)  # Make predictions on test_df
@@ -202,14 +227,14 @@ class ProphetModel(BaseEstimator, TransformerMixin):
             "h": pd.DateOffset(hours=1),
             "D": pd.DateOffset(days=1),
             "W": pd.DateOffset(weeks=1),
-            "ME": pd.DateOffset(months=1),
+            "MS": pd.DateOffset(months=1),
         }
         end_mapping = {
-            "min": pd.DateOffset(minutes=self.f_period-1),
-            "h": pd.DateOffset(hours=self.f_period-1),
-            "D": pd.DateOffset(days=self.f_period-1),
-            "W": pd.DateOffset(weeks=self.f_period-1),
-            "ME": pd.DateOffset(months=self.f_period-1),
+            "min": pd.DateOffset(minutes=self.f_period - 1),
+            "h": pd.DateOffset(hours=self.f_period - 1),
+            "D": pd.DateOffset(days=self.f_period - 1),
+            "W": pd.DateOffset(weeks=self.f_period - 1),
+            "MS": pd.DateOffset(months=self.f_period - 1),
         }
 
         start_date = self.test_df["ds"].max() + start_mapping[self.freq]
@@ -220,6 +245,8 @@ class ProphetModel(BaseEstimator, TransformerMixin):
         future_df["y"] = np.nan
         if test_df is not None:
             future_df = pd.concat([future_df, test_df], axis=1)
+        if self.encoder is not None:  # Perform One Hot Encoding only if encoder exists (if categorical features were present)
+            future_df = self.encode_test(future_df)
         future_df = self.add_features(future_df, self.selected_cols)
         future_df = self.create_date_features(future_df)
         predictions = self.m.predict(future_df)
