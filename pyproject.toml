@@ -25,7 +25,7 @@ dependencies = [
     "scikit-learn==1.6.1",
     "xgboost==2.1.4",
     "tqdm==4.67.1",
-    "matplotlib==3.10.0",
+    "matplotlib==3.10.1",
     "shap==0.46.0",
     "numpy==2.0.2",
     "plotly==6.0.0",
