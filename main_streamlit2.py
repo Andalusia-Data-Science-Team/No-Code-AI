@@ -40,7 +40,6 @@ def download_preds(df):
 
 # Page Title
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
-
 # File Upload Section
 st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
@@ -53,6 +52,7 @@ SEED = 42
 np.random.seed(SEED)
 
 if uploaded_file:
+    # utils.log_user_action("Session Started", "Data Was Uploaded")
     # Handle file upload
     file_extension = uploaded_file.name.split(".")[-1]
     if file_extension == "csv":
@@ -208,6 +208,7 @@ if uploaded_file:
     st.markdown("### Step 3: Data Preprocessing")
     if "df" in locals():
         cfg = {"save": True}  # for inference stability it's fixed
+        cfg["ip"] = get_remote_ip()
         cfg["model_kw"] = dict()
 
         with st.expander(" :broom: Handle Missing Data"):
@@ -598,8 +599,6 @@ if uploaded_file:
 
     # Execute Task
     if st.button("🚀 Train Model"):
-        utils.log_user_action("User IP", get_remote_ip())
-
         if task_type == "Classification":
             st.write("Perform classification task with option:")
             X_train, X_test, y_train, y_test = utils.process_data(

@@ -437,26 +437,26 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
         rmse, mape = pf.calculate_errors()
-        with open("model.pkl", "wb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "wb") as f:
             pickle.dump(pf, f)  # Saving trained model
-        log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape))
+        log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape), cfg["ip"])
         return pf, (rmse, mape)
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
     if cfg["save"]:
-        _model.save_model("model.pkl")
+        _model.save_model(f"model_{cfg["ip"].replace(".", "_")}.pkl")
 
     if cfg["task_type"] == "Classification":
         # p= _model.predict_prob(X_test)
         # cm, acc= _model.cls_metrics(X_test, y_test)
         metrics_dict = _model.cls_metrics(X_test, y_test)
-        log_user_action("Classification Metrics (CM and Accuracy)", metrics_dict)
+        log_user_action("Classification Metrics (CM and Accuracy)", metrics_dict, cfg["ip"])
         return metrics_dict
 
     elif cfg["task_type"] == "Regression":
         mse, r2 = _model.reg_metrics(X_test, y_test)
-        log_user_action("Regression Metrics (MSE and R2)", (mse, r2))
+        log_user_action("Regression Metrics (MSE and R2)", (mse, r2), cfg["ip"])
         return mse, r2
 
     else:
@@ -466,7 +466,7 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
 def inference(X, cfg, proba=False):
     try:
-        with open("model.pkl", "rb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
 
         # map the algorithm to its object
@@ -497,9 +497,10 @@ def inference(X, cfg, proba=False):
         return _model.pipeline.predict(X)
 
 
-def get_corresponding_labels(y, encode=False):
+# added cfg as a parameter to retrieve model name correctly using ip
+def get_corresponding_labels(y, cfg, encode=False):
     try:
-        with open("model.pkl", "rb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
 
         if encode:
