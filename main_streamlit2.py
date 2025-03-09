@@ -696,8 +696,8 @@ if uploaded_file:
             st.success("✅ Predictions generated successfully!")
             st.write("Here is the test data with predictions:")
             st.dataframe(st.session_state.cluster_df)
-
-    if st.session_state.cluster_df and task_type == "Cluster":
+    # Not to refresh the page before showing the plots
+    if st.session_state.cluster_df is True and task_type == "Cluster":
         x_col = st.selectbox("Choose X-axis", options=st.session_state.cluster_df.columns[:-1])
         y_col = st.selectbox("Choose Y-axis", options=st.session_state.cluster_df.columns[:-1])
 
