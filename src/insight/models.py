@@ -439,6 +439,7 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         rmse, mape = pf.calculate_errors()
         with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "wb") as f:
             pickle.dump(pf, f)  # Saving trained model
+        print(f"Model saved successfully as: model_{cfg["ip"].replace(".", "_")}.pkl")    
         log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape), cfg["ip"])
         return pf, (rmse, mape)
 

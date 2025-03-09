@@ -444,6 +444,7 @@ def process_data(_df, cfg, target, task_type, split_value, selected_options, all
     log_user_action("Dropped Columns", selected_options, cfg["ip"])
     log_user_action("Original Number of Rows", _df.shape[0], cfg["ip"])
     log_user_action("Original Number of Columns", _df.shape[1], cfg["ip"])
+    log_user_action("Validation Size", split_value, cfg["ip"])
 
     if cfg["outlier"] != "Use Isolation Forest":
         # Remove outliers before imputation for a more precise mean calculation
