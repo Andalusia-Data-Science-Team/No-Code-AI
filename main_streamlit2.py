@@ -40,7 +40,6 @@ def download_preds(df):
 
 # Page Title
 st.title("📈 AI-Powered Insights: Zero-Code Data Analysis & Modeling")
-
 # File Upload Section
 st.markdown("### Step 1: Upload Training Data")
 uploaded_file = st.file_uploader(
@@ -53,6 +52,7 @@ SEED = 42
 np.random.seed(SEED)
 
 if uploaded_file:
+    # utils.log_user_action("Session Started", "Data Was Uploaded")
     # Handle file upload
     file_extension = uploaded_file.name.split(".")[-1]
     if file_extension == "csv":
@@ -208,6 +208,7 @@ if uploaded_file:
     st.markdown("### Step 3: Data Preprocessing")
     if "df" in locals():
         cfg = {"save": True}  # for inference stability it's fixed
+        cfg["ip"] = get_remote_ip()
         cfg["model_kw"] = dict()
 
         with st.expander(" :broom: Handle Missing Data"):
@@ -432,13 +433,13 @@ if uploaded_file:
             else None
         )
 
-        if task_type != "Cluster":  # == "Classification" or task_type == "Regression"
-            validation_size = st.slider(
+        if task_type != "Cluster":
+            validation_size = (st.slider(
                 "📊 Select Validation Size (%) : recommended value: 20% ",
                 min_value=1,
                 max_value=100,
                 value=20,
-            )
+            ))/100
             selected_options = st.multiselect(
                 "❌ Select Columns to Exclude",
                 cols,
@@ -589,7 +590,7 @@ if uploaded_file:
             )
             ts_kw["freq"] = selected_freq
             ts_kw["f_period"] = int(num_of_points)
-            ts_kw["validation_size"] = validation_size / 100
+            ts_kw["validation_size"] = validation_size
             cfg["ts_config"] = ts_kw
 
         cfg["apply_GridSearch"] = False
@@ -598,8 +599,6 @@ if uploaded_file:
 
     # Execute Task
     if st.button("🚀 Train Model"):
-        utils.log_user_action("User IP", get_remote_ip())
-
         if task_type == "Classification":
             st.write("Perform classification task with option:")
             X_train, X_test, y_train, y_test = utils.process_data(
@@ -676,39 +675,39 @@ if uploaded_file:
                     st.session_state.ts_preds
                 )
 
-            elif task_type == "Cluster":
-                st.write("Perform Clustering task with option:")
+        elif task_type == "Cluster":
+            st.write("Perform Clustering task with option:")
 
-    if task_type == "Cluster":
-        cluster_df = utils.process_data(
-            DF, cfg, target, task_type, validation_size, selected_options, all=True
-        )
-        report = model(cluster_df, cfg=cfg)
-        # st.pyplot(report)
-        X_test = (
-            cluster_df.copy()
-        )  # Ensure the test data does not include the target column
-        predictions = inference(
-            X_test, cfg
-        )  # Replace this with your prediction function
+            cluster_df = utils.process_data(
+                DF, cfg, target, task_type, validation_size, selected_options, all=True
+            )
+            report = model(cluster_df, cfg=cfg)
+            # st.pyplot(report)
+            X_test = (
+                cluster_df.copy()
+            )  # Ensure the test data does not include the target column
+            predictions = inference(
+                X_test, cfg
+            )  # Replace this with your prediction function
 
-        cluster_df["cluster"] = predictions  # Append predictions to the test data
-        # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
-        st.success("✅ Predictions generated successfully!")
-        st.write("Here is the test data with predictions:")
-        st.dataframe(cluster_df)
-
-        x_col = st.selectbox("Choose X-axis", options=cluster_df.columns[:-1])
-        y_col = st.selectbox("Choose Y-axis", options=cluster_df.columns[:-1])
+            cluster_df["cluster"] = predictions  # Append predictions to the test data
+            st.session_state.cluster_df = cluster_df
+            # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
+            st.success("✅ Predictions generated successfully!")
+            st.write("Here is the test data with predictions:")
+            st.dataframe(st.session_state.cluster_df)
+    # Not to refresh the page before showing the plots
+    if st.session_state.cluster_df is True and task_type == "Cluster":
+        x_col = st.selectbox("Choose X-axis", options=st.session_state.cluster_df.columns[:-1])
+        y_col = st.selectbox("Choose Y-axis", options=st.session_state.cluster_df.columns[:-1])
 
         # Only run plotting if both selections are made
         if st.button("🚀 Plot  Clusters"):
             cluster_plot = utils.cluster_scatter_plot(
-                cluster_df, x_col, y_col, cluster_col="cluster"
+                st.session_state.cluster_df, x_col, y_col, cluster_col="cluster"
             )
-            st.write(cluster_plot)
-
-        download_preds(cluster_df)
+            st.plotly_chart(cluster_plot, use_container_width=True)
+        download_preds(st.session_state.cluster_df)
         st.stop()
 
     if task_type != "Time":

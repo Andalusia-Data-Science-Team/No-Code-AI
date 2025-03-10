@@ -39,14 +39,23 @@ if not user_logger.handlers:
         "logs/user_actions.log", mode="a"
     )  # Create a file handler that directs log messages to a file
     formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(message)s"
+        "%(asctime)s - %(levelname)s - %(user_ip)s - %(message)s"
     )  # Formatter defines how the log messages look
     handler.setFormatter(formatter)  # Formats logs before saving them
     user_logger.addHandler(handler)  # Attach handler to the logger
 
+# user_ip = None
 
-def log_user_action(type, action):
-    user_logger.info(f"{type}: {action}")
+# def set_user_ip(ip):
+#     global user_ip
+#     user_ip = ip
+
+# def get_user_ip():
+#     return user_ip
+
+
+def log_user_action(type, action, user_ip):
+    user_logger.info(f"{type}: {action}", extra={"user_ip": user_ip})
 
 
 def list_wrap(x):
@@ -431,10 +440,11 @@ def convert_numeric(df):
 
 
 def process_data(_df, cfg, target, task_type, split_value, selected_options, all=False):
-    log_user_action("cfgs", cfg)
-    log_user_action("Dropped Columns", selected_options)
-    log_user_action("Original Number of Rows", _df.shape[0])
-    log_user_action("Original Number of Columns", _df.shape[1])
+    log_user_action("cfgs", cfg, cfg["ip"])
+    log_user_action("Dropped Columns", selected_options, cfg["ip"])
+    log_user_action("Original Number of Rows", _df.shape[0], cfg["ip"])
+    log_user_action("Original Number of Columns", _df.shape[1], cfg["ip"])
+    log_user_action("Validation Size", split_value, cfg["ip"])
 
     if cfg["outlier"] != "Use Isolation Forest":
         # Remove outliers before imputation for a more precise mean calculation
@@ -465,8 +475,8 @@ def process_data(_df, cfg, target, task_type, split_value, selected_options, all
             )
             _DF = missing(_DF, cfg["clean"])
 
-    log_user_action("Number of Rows After Processing", _DF.shape[0])
-    log_user_action("Number of columns After Processing", _DF.shape[1])
+    log_user_action("Number of Rows After Processing", _DF.shape[0], cfg["ip"])
+    log_user_action("Number of columns After Processing", _DF.shape[1], cfg["ip"])
     if all:  # Not to split data when doing clustering or time series
         return _DF
 
