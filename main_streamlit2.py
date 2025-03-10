@@ -13,23 +13,6 @@ if "cluster_df" not in st.session_state:
     st.session_state.cluster_df = None
 
 
-# def get_remote_ip() -> str:
-#     """Get remote ip."""
-
-#     try:
-#         ctx = get_script_run_ctx()
-#         if ctx is None:
-#             return None
-
-#         session_info = runtime.get_instance().get_client(ctx.session_id)
-#         if session_info is None:
-#             return None
-#     except Exception:
-#         return None
-
-#     return session_info.request.remote_ip
-
-
 def get_remote_ip() -> str:
     """Get remote IP excluding loopback addresses."""
 
@@ -43,7 +26,7 @@ def get_remote_ip() -> str:
             return None
 
         remote_ip = session_info.request.remote_ip
-        if remote_ip == "::1":  # Exclude loopback addresses
+        if remote_ip == "::1":  # Exclude loopback address
             return ".1"
     except Exception:
         return None
