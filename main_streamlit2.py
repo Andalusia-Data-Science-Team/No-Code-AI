@@ -9,6 +9,9 @@ import altair as alt
 from streamlit import runtime
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
+if "cluster_df" not in st.session_state:
+    st.session_state.cluster_df = None
+
 
 def get_remote_ip() -> str:
     """Get remote ip."""
@@ -691,6 +694,7 @@ if uploaded_file:
             )  # Replace this with your prediction function
 
             cluster_df["cluster"] = predictions  # Append predictions to the test data
+
             st.session_state.cluster_df = cluster_df
             # cluster_df['Cluster'] = cluster_df['Predictions'].apply(lambda x: max(x, 1))
             st.success("✅ Predictions generated successfully!")
