@@ -430,7 +430,6 @@ class Model:
 
 
 def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
-    # ip = cfg["ip"].replace(".", "_")
     # global prophet_kw
     if cfg["task_type"] == "Time":
         prophet_kw = cfg["ts_config"]
@@ -467,7 +466,6 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
 
 def inference(X, cfg, proba=False):
-    # ip = cfg["ip"].replace(".", "_")
     try:
         with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
@@ -502,7 +500,6 @@ def inference(X, cfg, proba=False):
 
 # added cfg as a parameter to retrieve model name correctly using ip
 def get_corresponding_labels(y, cfg, encode=False):
-    # ip = cfg["ip"].replace(".", "_")
     try:
         with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
