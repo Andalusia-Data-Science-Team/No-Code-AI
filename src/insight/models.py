@@ -430,7 +430,7 @@ class Model:
 
 
 def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
-    ip = cfg["ip"].replace(".", "_")
+    # ip = cfg["ip"].replace(".", "_")
     # global prophet_kw
     if cfg["task_type"] == "Time":
         prophet_kw = cfg["ts_config"]
@@ -438,16 +438,16 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
         rmse, mape = pf.calculate_errors()
-        with open(f"model_{ip}.pkl", "wb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "wb") as f:
             pickle.dump(pf, f)  # Saving trained model
-        print(f"Model saved successfully as: model_{ip}.pkl")
+        print(f"Model saved successfully as: model_{cfg["ip"].replace(".", "_")}.pkl")
         log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape), cfg["ip"])
         return pf, (rmse, mape)
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
     if cfg["save"]:
-        _model.save_model(f"model_{ip}.pkl")
+        _model.save_model(f"model_{cfg["ip"].replace(".", "_")}.pkl")
 
     if cfg["task_type"] == "Classification":
         # p= _model.predict_prob(X_test)
@@ -467,9 +467,9 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
 
 def inference(X, cfg, proba=False):
-    ip = cfg["ip"].replace(".", "_")
+    # ip = cfg["ip"].replace(".", "_")
     try:
-        with open(f"model_{ip}.pkl", "rb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
 
         # map the algorithm to its object
@@ -502,9 +502,9 @@ def inference(X, cfg, proba=False):
 
 # added cfg as a parameter to retrieve model name correctly using ip
 def get_corresponding_labels(y, cfg, encode=False):
-    ip = cfg["ip"].replace(".", "_")
+    # ip = cfg["ip"].replace(".", "_")
     try:
-        with open(f"model_{ip}.pkl", "rb") as f:
+        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
             _model = pickle.load(f)
 
         if encode:
