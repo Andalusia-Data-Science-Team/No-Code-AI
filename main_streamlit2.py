@@ -14,7 +14,7 @@ if "cluster_df" not in st.session_state:
 
 
 def get_remote_ip() -> str:
-    """Get remote ip."""
+    """Get remote IP excluding loopback addresses."""
 
     try:
         ctx = get_script_run_ctx()
@@ -24,10 +24,14 @@ def get_remote_ip() -> str:
         session_info = runtime.get_instance().get_client(ctx.session_id)
         if session_info is None:
             return None
+
+        remote_ip = session_info.request.remote_ip
+        if remote_ip == "::1":  # Exclude loopback address
+            return ".1"
     except Exception:
         return None
 
-    return session_info.request.remote_ip
+    return remote_ip
 
 
 def download_preds(df):
@@ -701,7 +705,7 @@ if uploaded_file:
             st.write("Here is the test data with predictions:")
             st.dataframe(st.session_state.cluster_df)
     # Not to refresh the page before showing the plots
-    if st.session_state.cluster_df is True and task_type == "Cluster":
+    if st.session_state.cluster_df is not None and task_type == "Cluster":
         x_col = st.selectbox("Choose X-axis", options=st.session_state.cluster_df.columns[:-1])
         y_col = st.selectbox("Choose Y-axis", options=st.session_state.cluster_df.columns[:-1])
 
