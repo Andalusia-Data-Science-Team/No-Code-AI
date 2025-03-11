@@ -437,16 +437,16 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
         pf = ProphetModel(**prophet_kw)
         pf.fit_transform(X_train)
         rmse, mape = pf.calculate_errors()
-        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "wb") as f:
+        with open("model{}.pkl".format(cfg["ip"].replace(".", "_")), "wb") as f:
             pickle.dump(pf, f)  # Saving trained model
-        print(f"Model saved successfully as: model_{cfg["ip"].replace(".", "_")}.pkl")
+        print("Model saved successfully as: model{}.pkl".format(cfg["ip"].replace(".", "_")))
         log_user_action("Time Series Metrics (RMSE and MAPE)", (rmse, mape), cfg["ip"])
         return pf, (rmse, mape)
 
     _model = Model(cfg["alg"], cfg["apply_GridSearch"], model_kws=cfg["model_kw"])
     _model.train(X_train, y_train, cfg["skew_fix"], cfg["poly_feat"])
     if cfg["save"]:
-        _model.save_model(f"model_{cfg["ip"].replace(".", "_")}.pkl")
+        _model.save_model("model{}.pkl".format(cfg["ip"].replace(".", "_")))
 
     if cfg["task_type"] == "Classification":
         # p= _model.predict_prob(X_test)
@@ -467,7 +467,7 @@ def model(X_train=None, X_test=None, y_train=None, y_test=None, cfg=None):
 
 def inference(X, cfg, proba=False):
     try:
-        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
+        with open("model{}.pkl".format(cfg["ip"].replace(".", "_")), "rb") as f:
             _model = pickle.load(f)
 
         # map the algorithm to its object
@@ -501,7 +501,7 @@ def inference(X, cfg, proba=False):
 # added cfg as a parameter to retrieve model name correctly using ip
 def get_corresponding_labels(y, cfg, encode=False):
     try:
-        with open(f"model_{cfg["ip"].replace(".", "_")}.pkl", "rb") as f:
+        with open("model{}.pkl".format(cfg["ip"].replace(".", "_")), "rb") as f:
             _model = pickle.load(f)
 
         if encode:
